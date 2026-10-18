@@ -896,10 +896,6 @@ ol {
   height: 30px;
   border-radius: 8px;
 }
-.iconbtn--flip {
-  transform: rotate(180deg);
-}
-
 .linkbtn {
   font-size: 13px;
   font-weight: 600;
@@ -1257,6 +1253,8 @@ ol {
 }
 
 .datefield__panel {
+  /* Referentni kontejner za izbor skraćenog/punog naziva mjeseca. */
+  container: datebar / inline-size;
   margin-top: 10px;
   padding: 12px;
   background: var(--card-sunk);
@@ -1271,10 +1269,14 @@ ol {
   justify-content: space-between;
   gap: 10px;
   margin-bottom: 10px;
+  /* Bez prelamanja: elementi se skupljaju, ne prelaze u novi red. */
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 
 .segmented {
   display: inline-flex;
+  flex-shrink: 0;
   padding: 3px;
   gap: 2px;
   background: var(--paper-2);
@@ -1295,14 +1297,20 @@ ol {
   box-shadow: var(--shadow-1);
 }
 
+/* Mjesec + strelice u svom redu, pune širine: nikad ne potiskuju dugmad
+   "Sedmica / Mjesec" i nikad se ne lome na više redova. */
+/* Ikona je strelica ulijevo; ovim je okrećemo udesno. */
+.icon-flip {
+  transform: rotate(180deg);
+}
+
 .datefield__nav {
   display: flex;
   align-items: center;
   gap: 4px;
-}
-
-.datefield__bar {
-  flex-wrap: wrap;
+  margin: -2px 0 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
 }
 
 .datefield__month {
@@ -1313,14 +1321,18 @@ ol {
   font-weight: 600;
   color: var(--ink-2);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   text-transform: capitalize;
 }
 
-/* Puno ime mjeseca kad ima mjesta, skraćeno na uskim telefonima. */
+/* Naziv mjeseca: skraćeno na uskim ekranima, puno kad ima mjesta.
+   Ovo je zasnovano na širini KALENDARA, a ne ekrana — panel je uži od
+   ekrana (padding fioke), pa se pun naziv ranije ne uklapa. */
 .only-narrow {
   display: none;
 }
-@media (max-width: 389px) {
+@container datebar (max-width: 330px) {
   .only-wide {
     display: none;
   }

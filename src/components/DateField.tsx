@@ -54,7 +54,6 @@ export function DateField({ value, onChange, markedDates, min }: Props) {
 
   const visibleWeeks = weeks.slice(weekOffset, weekOffset + 3);
   const monthWeeks = useMemo(() => monthGrid(cursor), [cursor]);
-  const cursorDate = fromISODate(cursor);
 
   const pick = (iso: string) => {
     if (iso < minIso) return;
@@ -108,36 +107,30 @@ export function DateField({ value, onChange, markedDates, min }: Props) {
               </button>
             </div>
 
-            {mode === 'month' && (
-              <div className="datefield__nav">
-                <button
-                  type="button"
-                  className="iconbtn iconbtn--sm"
-                  onClick={() => shiftCursor(-1)}
-                  aria-label="Prethodni mjesec"
-                >
-                  <IconChevronLeft size={18} />
-                </button>
-                <span className="datefield__month">
-                  {/* Skraćeno ime na uskim ekranima, puno na širem. */}
-                  <span className="only-wide">
-                    {MONTHS[cursorDate.getMonth()]} {cursorDate.getFullYear()}
-                  </span>
-                  <span className="only-narrow">
-                    {MONTHS_SHORT[cursorDate.getMonth()]} {cursorDate.getFullYear()}.{' '}
-                  </span>
-                </span>
-                <button
-                  type="button"
-                  className="iconbtn iconbtn--sm iconbtn--flip"
-                  onClick={() => shiftCursor(1)}
-                  aria-label="Sljedeći mjesec"
-                >
-                  <IconChevronLeft size={18} />
-                </button>
-              </div>
-            )}
+            {mode === 'week' && <MonthLabel date={value} />}
           </div>
+
+          {mode === 'month' && (
+            <div className="datefield__nav">
+              <button
+                type="button"
+                className="iconbtn iconbtn--sm"
+                onClick={() => shiftCursor(-1)}
+                aria-label="Prethodni mjesec"
+              >
+                <IconChevronLeft size={18} />
+              </button>
+              <MonthLabel date={cursor} />
+              <button
+                type="button"
+                className="iconbtn iconbtn--sm"
+                onClick={() => shiftCursor(1)}
+                aria-label="Sljedeći mjesec"
+              >
+                <IconChevronLeft size={18} className="icon-flip" />
+              </button>
+            </div>
+          )}
 
           <div className="datefield__grid" aria-label="Kalendar">
             <div className="datefield__weekdays">
@@ -194,6 +187,24 @@ export function DateField({ value, onChange, markedDates, min }: Props) {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Naziv mjeseca i godina. Skraćeno na uskim ekranima, puno na širem, i uvijek
+ * u jednom redu — nikad se ne lomi na dva reda.
+ */
+function MonthLabel({ date }: { date: string }) {
+  const d = fromISODate(date);
+  return (
+    <span className="datefield__month">
+      <span className="only-wide">
+        {MONTHS[d.getMonth()]} {d.getFullYear()}
+      </span>
+      <span className="only-narrow">
+        {MONTHS_SHORT[d.getMonth()]} {d.getFullYear()}.
+      </span>
+    </span>
   );
 }
 
