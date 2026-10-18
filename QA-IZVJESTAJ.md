@@ -137,8 +137,8 @@ python3 qa/verify.py
 Offline provjera: produkcijski build, service worker aktivan, mreža isključena,
 stranica se ponovo učita sa sačuvanim ispitom — bez grešaka u konzoli.
 
-Slike završnog stanja su u `qa/shots/`:
+Slike završnog stanja se generišu pokretanjem `qa/verify.py` u `qa/shots/`
+(folder je u `.gitignore`, pa se ne commituje). Ključne slike:
 `final-1440x900-month-six-rows.png`, `final-390x844-month-six-rows.png`,
 `final-360x640-month-six-rows.png`, `final-844x390-month-six-rows.png`,
-`final-tablet-768-month-six.png`,
-`final-dark-phone-month-six-rows.png`.
+`final-tablet-768-month-six.png`, `final-dark-phone-month-six-rows.png`.

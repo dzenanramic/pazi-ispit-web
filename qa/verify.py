@@ -7,7 +7,7 @@ uključujući mjesec sa šest redova i stanje sa greškom validacije.
 Pokretanje (zahtijeva Python Playwright i pokrenut `npm run dev` na 5173):
     python3 qa/verify.py
 
-Slike se čuvaju u qa/shots/.
+Slike se čuvaju u qa/shots/ (u .gitignore — generišu se pri pokretanju).
 """
 import sys
 from playwright.sync_api import sync_playwright

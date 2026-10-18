@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Rezultati QA skripte (slike se generišu pokretanjem qa/verify.py)
+qa/shots
