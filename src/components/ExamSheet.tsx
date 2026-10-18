@@ -6,6 +6,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { todayISO } from '../lib/date';
 import { useSubjectSuggestions } from '../lib/store';
 import { capitalize } from '../lib/storage';
+import { useKeyboard } from '../lib/useKeyboard';
 import { DateField } from './DateField';
 import { IconClose } from './Icons';
 
@@ -29,6 +30,9 @@ export function ExamSheet({ open, mode, initial, markedDates, onClose, onSubmit,
   const [closing, setClosing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const titleId = useId();
+  const keyboard = useKeyboard(open);
+  // Ispod ~400px vidljivog prostora (mali telefon + tastatura) forma se stisne.
+  const cramped = keyboard.open && keyboard.visibleHeight < 400;
 
   const suggestions = useSubjectSuggestions(name);
 
@@ -40,9 +44,27 @@ export function ExamSheet({ open, mode, initial, markedDates, onClose, onSubmit,
     setFocusedSuggestion(-1);
     setClosing(false);
     // Fokus tek posle animacije otvaranja; na iOS-u instant fokus izaziva zoom.
-    const t = window.setTimeout(() => inputRef.current?.focus({ preventScroll: true }), 220);
+    // Uz to, iOS 300ms nakon dodira šalje "simulirani" click na koordinate
+    // dugmeta — a to sada može biti pozadina i zatvoriti fioku. Zato na iOS-u
+    // tastatura ne krece sama, nego tek kad korisnik dodirne polje.
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const t = isIOS
+      ? 0
+      : window.setTimeout(() => {
+          inputRef.current?.focus({ preventScroll: true });
+          // `preventScroll` je svjesno: skrolovanje radi poseban efekat ispod, koji
+          // zna koliko tastatura prekriva ekran (inače browser pomjeri polje iza tastature).
+        }, 220);
     return () => window.clearTimeout(t);
   }, [open, initial?.name, initial?.date]);
+
+  // Kad se tastatura otvori ili promijeni visinu, polje predmeta mora ostati
+  // vidljivo. Telefoni bez podrške za `visualViewport` preskaču ovo i
+  // ponašaju se kao ranije.
+  useEffect(() => {
+    if (!open || !keyboard.open) return;
+    inputRef.current?.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+  }, [open, keyboard.open, keyboard.visibleHeight]);
 
   useEffect(() => {
     if (!open) return;
@@ -113,9 +135,28 @@ export function ExamSheet({ open, mode, initial, markedDates, onClose, onSubmit,
   if (!open) return null;
 
   return (
-    <div className={`sheet-layer ${closing ? 'is-closing' : ''}`}>
+    <div
+      className={`sheet-layer ${closing ? 'is-closing' : ''} ${keyboard.open ? 'is-keyboard' : ''} ${cramped ? 'is-cramped' : ''}`}
+      style={
+        keyboard.open
+          ? ({ '--keyboard-inset': `${keyboard.keyboardHeight}px` } as React.CSSProperties)
+          : undefined
+      }
+    >
       <button type="button" className="sheet-backdrop" onClick={close} aria-label="Zatvori" tabIndex={-1} />
-      <div className="sheet" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+      <div
+        className="sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        style={{
+          // Kad je tastatura gore fioka sjeda tačno na njen gornji rub: vidi se
+          // onoliko sadržaja koliko stvarno staje, a dugmad ostaju na dohvatu.
+          ...(keyboard.open
+            ? { maxHeight: `${Math.max(220, keyboard.visibleHeight - 8)}px` }
+            : null),
+        }}
+      >
         <div className="sheet__grip" aria-hidden />
         <header className="sheet__head">
           <div>
