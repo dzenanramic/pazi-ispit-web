@@ -6,18 +6,18 @@ import { useMemo, useState } from 'react';
 import { dayKey, formatClock, formatDuration, formatShort, todayISO } from '../lib/date';
 import { addSession, useStore } from '../lib/store';
 import { sortExams } from '../lib/storage';
-import { useStudyTimer } from '../lib/useStudyTimer';
+import type { StudyTimerState } from '../lib/useStudyTimer';
 import { useTodayKey } from '../lib/useTodayKey';
 import { IconPause, IconPlay, IconUndo } from './Icons';
 
 type Props = {
-  initialExamId?: string | null;
+  timer: StudyTimerState;
+  examId: string | null;
+  onExamChange: (examId: string | null) => void;
 };
 
-export function StudyTimer({ initialExamId = null }: Props) {
+export function StudyTimer({ timer, examId, onExamChange }: Props) {
   const { exams, sessions } = useStore();
-  const timer = useStudyTimer();
-  const [examId, setExamId] = useState<string | null>(initialExamId);
   const [savedToast, setSavedToast] = useState(false);
 
   const upcoming = useMemo(() => sortExams(exams).filter(e => e.date >= todayISO()), [exams]);
@@ -67,7 +67,9 @@ export function StudyTimer({ initialExamId = null }: Props) {
           <span className="timer__clock" aria-live="off">
             {formatClock(timer.elapsed)}
           </span>
-          <span className="timer__state">{timer.running ? 'učenje u toku' : 'pauza'}</span>
+          <span className="timer__state">
+            {timer.running ? 'učenje u toku' : timer.elapsed > 0 ? 'pauza' : 'spremno'}
+          </span>
         </div>
       </div>
 
@@ -76,16 +78,17 @@ export function StudyTimer({ initialExamId = null }: Props) {
           <>
             <span className="timer__exam-label">{selected ? 'Učiš za:' : 'Za koji ispit?'}</span>
             <div className="chips" role="listbox" aria-label="Odaberi ispit">
-              {upcoming.slice(0, 4).map(e => (
+              {upcoming.map(e => (
                 <button
                   key={e.id}
                   type="button"
                   role="option"
                   aria-selected={e.id === examId}
+                  title={e.name}
                   className={`chip ${e.id === examId ? 'is-active' : ''}`}
-                  onClick={() => setExamId(e.id === examId ? null : e.id)}
+                  onClick={() => onExamChange(e.id === examId ? null : e.id)}
                 >
-                  {e.name}
+                  <span className="chip__name">{e.name}</span>
                   <span className="chip__date">{formatShort(e.date).slice(0, 6)}</span>
                 </button>
               ))}
@@ -125,7 +128,11 @@ export function StudyTimer({ initialExamId = null }: Props) {
         </div>
       </dl>
 
-      {savedToast && <div className="toast">Sesija sačuvana.</div>}
+      {savedToast && (
+        <div className="toast" role="status">
+          Sesija sačuvana.
+        </div>
+      )}
     </div>
   );
 }

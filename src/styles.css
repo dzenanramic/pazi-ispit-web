@@ -21,15 +21,16 @@
   /* Tinta */
   --ink: #1b2620;
   --ink-2: #46524b;
-  --ink-3: #7d877f;
-  --ink-4: #a9b1aa;
+  /* Sekundarni tekst mora proći WCAG AA (4.5:1) i na papiru i na kartici. */
+  --ink-3: #626c64;
+  --ink-4: #7f8981;
 
   /* Linije */
   --line: #e0dacb;
   --line-strong: #cec6b3;
 
   /* Akcent — terakota (CTA, aktivna stanja) */
-  --accent: #c2542e;
+  --accent: #b44a26;
   --accent-ink: #9c3f20;
   --accent-soft: #f6e2d8;
   --accent-tint: #fbf1ec;
@@ -41,7 +42,7 @@
   /* Stanja */
   --ok: #3f6b4a;
   --ok-soft: #e6efe6;
-  --warn: #a86a12;
+  --warn: #96600f;
   --warn-soft: #f8edd6;
   --bad: #a8342a;
   --bad-soft: #f7e3df;
@@ -82,8 +83,8 @@
 
     --ink: #eef0e9;
     --ink-2: #bcc4bb;
-    --ink-3: #8b958c;
-    --ink-4: #6a746c;
+    --ink-3: #9aa49b;
+    --ink-4: #7e887f;
 
     --line: #2f3732;
     --line-strong: #3e4741;
@@ -358,6 +359,11 @@ ol {
   letter-spacing: -0.012em;
   line-height: 1.2;
   overflow-wrap: anywhere;
+  /* Naziv od 200 znakova ne smije pretvoriti karticu u zid teksta. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .nextup__big {
@@ -541,6 +547,11 @@ ol {
   overflow-wrap: break-word;
   hyphens: auto;
   line-height: 1.28;
+  /* Duži nazivi se skraćuju na dva reda; pun tekst je u `title` i u formi. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .exam__meta {
@@ -575,7 +586,7 @@ ol {
 }
 .exam--overdue .exam__count,
 .exam--overdue .exam__unit {
-  color: var(--ink-4);
+  color: var(--ink-3);
 }
 
 .exam__unit {
@@ -725,7 +736,7 @@ ol {
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--ink-4);
+  color: var(--ink-3);
 }
 
 .foot__value {
@@ -738,7 +749,7 @@ ol {
 .foot__note {
   grid-column: 1 / -1;
   font-size: 11.5px;
-  color: var(--ink-4);
+  color: var(--ink-3);
   line-height: 1.5;
 }
 
@@ -918,6 +929,20 @@ ol {
   background: var(--bad-soft);
 }
 
+.datefield__actions .linkbtn--done {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding: 6px 10px;
+  color: var(--accent-ink);
+  background: var(--accent-tint);
+  font-weight: 700;
+}
+.datefield__actions .linkbtn--done:hover {
+  background: var(--accent-soft);
+}
+
 /* ---------- Fioka (sheet) ---------- */
 
 .sheet-layer {
@@ -963,6 +988,14 @@ ol {
   animation: sheet-up 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* Na telefonu fioka smije iskoristiti skoro cijelu vidljivu visinu. Ranije je
+   `88dvh` ostavljao premalo prostora čim se otvori kalendar. */
+@media (max-width: 799px) {
+  .sheet {
+    max-height: calc(100dvh - max(8px, env(safe-area-inset-top)));
+  }
+}
+
 .sheet-layer.is-closing .sheet {
   animation: sheet-down 0.16s ease-in both;
 }
@@ -987,7 +1020,7 @@ ol {
 }
 
 /* Na desktopu fioka postaje normalan dijalog u sredini. */
-@media (min-width: 640px) and (min-height: 620px) {
+@media (min-width: 640px) and (min-height: 560px) {
   .sheet-layer {
     align-items: center;
   }
@@ -1012,7 +1045,7 @@ ol {
   background: var(--line-strong);
   margin: 4px auto 10px;
 }
-@media (min-width: 640px) and (min-height: 620px) {
+@media (min-width: 640px) and (min-height: 560px) {
   .sheet__grip {
     display: none;
   }
@@ -1048,6 +1081,314 @@ ol {
 
 .sheet--confirm {
   padding: 22px 22px calc(var(--safe-bottom) + 22px);
+}
+
+.sheet__form {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- Kalendar u fioci: raspored bez skrolovanja ---------- */
+
+/*
+ * Desktop: kada se otvori kalendar, fioka se širi u dva stupca. Polja i
+ * dugmad ostaju lijevo, kalendar desno. Tako se visina ne povećava preko
+ * maksimuma i ništa ne mora da se skroluje — ni mjesec sa šest redova.
+ */
+@media (min-width: 800px) and (min-height: 560px) {
+  .sheet-layer.is-calendar .sheet {
+    width: min(calc(100% - 32px), 900px);
+    max-height: min(96dvh, 860px);
+  }
+
+  .sheet-layer.is-calendar .sheet__form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(350px, 420px);
+    grid-template-rows: auto 1fr;
+    column-gap: 32px;
+    align-items: start;
+  }
+
+  .sheet-layer.is-calendar .field--name {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .sheet-layer.is-calendar .field--date {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    margin-bottom: 0;
+  }
+
+  .sheet-layer.is-calendar .sheet__actions {
+    grid-column: 1;
+    grid-row: 2;
+    align-self: end;
+    position: static;
+    margin-top: 0;
+  }
+
+  .sheet-layer.is-calendar .day {
+    aspect-ratio: auto;
+    height: 40px;
+  }
+}
+
+/* Niži desktop prozor (npr. 800×600): mjesec sa šest redova mora stati. */
+@media (min-width: 800px) and (min-height: 560px) and (max-height: 700px) {
+  .sheet-layer.is-calendar .sheet {
+    max-height: calc(100dvh - 16px);
+  }
+
+  .sheet-layer.is-calendar .datefield__panel {
+    padding: 9px;
+  }
+
+  .sheet-layer.is-calendar .datefield__bar {
+    margin-bottom: 8px;
+  }
+
+  .sheet-layer.is-calendar .day {
+    height: 35px;
+  }
+
+  .sheet-layer.is-calendar .datefield__actions {
+    margin-top: 6px;
+    padding-top: 6px;
+  }
+}
+
+/*
+ * Telefon: kalendar ostaje ispod polja, ali u kompaktnom obliku. Dok je
+ * otvoren, sklanjamo ponovljeni naslov i polje datuma (kalendar već pokazuje
+ * izbor), pa cijela forma staje bez skrola. "Gotovo" u kalendaru ga zatvara.
+ */
+@media (max-width: 799px) {
+  .sheet-layer.is-calendar .sheet__grip,
+  .sheet-layer.is-calendar .sheet__sub,
+  .sheet-layer.is-calendar .field--date .field__label,
+  .sheet-layer.is-calendar .datefield__toggle {
+    display: none;
+  }
+
+  .sheet-layer.is-calendar .sheet__head {
+    margin-bottom: 10px;
+  }
+
+  .sheet-layer.is-calendar .sheet__title {
+    font-size: 18px;
+  }
+
+  .sheet-layer.is-calendar .field {
+    margin-bottom: 8px;
+  }
+
+  .sheet-layer.is-calendar .field__label {
+    margin-bottom: 4px;
+    font-size: 10.5px;
+  }
+
+  .sheet-layer.is-calendar .datefield__panel {
+    margin-top: 0;
+    padding: 8px;
+  }
+
+  .sheet-layer.is-calendar .datefield__bar {
+    margin-bottom: 6px;
+  }
+
+  .sheet-layer.is-calendar .day {
+    aspect-ratio: auto;
+    height: 35px;
+  }
+
+  .sheet-layer.is-calendar .datefield__actions {
+    margin-top: 5px;
+    padding-top: 5px;
+  }
+
+  .sheet-layer.is-calendar .sheet__actions {
+    margin-top: 8px;
+    padding-top: 8px;
+  }
+}
+
+/* Tablet u portretu: kalendar ne mora da se rastegne preko cijele širine. */
+@media (min-width: 640px) and (max-width: 799px) {
+  .sheet-layer.is-calendar .datefield__panel {
+    max-width: 480px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+
+/* Vrlo nizak ekran (mali telefon, ili telefon u pejzažu): još kompaktnije. */
+@media (max-width: 799px) and (max-height: 620px) {
+  .sheet-layer.is-calendar .sheet {
+    padding-top: 4px;
+    padding-bottom: calc(var(--safe-bottom) + 12px);
+  }
+
+  .sheet-layer.is-calendar .sheet__head {
+    margin-bottom: 6px;
+  }
+
+  .sheet-layer.is-calendar .sheet__title {
+    font-size: 16px;
+  }
+
+  .sheet-layer.is-calendar .field {
+    margin-bottom: 6px;
+  }
+
+  .sheet-layer.is-calendar .datefield__panel {
+    padding: 6px;
+  }
+
+  .sheet-layer.is-calendar .datefield__actions {
+    margin-top: 3px;
+    padding-top: 3px;
+  }
+
+  .sheet-layer.is-calendar .day {
+    height: 30px;
+  }
+
+  .sheet-layer.is-calendar .sheet__actions {
+    margin-top: 3px;
+    padding-top: 3px;
+  }
+
+  .sheet-layer.is-calendar .sheet__actions .btn {
+    padding: 9px 14px;
+  }
+}
+
+@media (max-height: 559px) {
+  .sheet {
+    max-height: calc(100dvh - 8px);
+    padding-top: 4px;
+    padding-bottom: calc(var(--safe-bottom) + 12px);
+  }
+
+  .sheet__grip,
+  .sheet__sub {
+    display: none;
+  }
+
+  .sheet__head {
+    margin-bottom: 8px;
+  }
+
+  .sheet__title {
+    font-size: 17px;
+  }
+
+  .field {
+    margin-bottom: 10px;
+  }
+
+  .sheet__actions {
+    margin-top: 10px;
+    padding-top: 10px;
+  }
+}
+
+/* Pejzaž na telefonu: dovoljno širine za dva stupca, malo visine. */
+@media (min-width: 560px) and (max-height: 559px) {
+  .sheet-layer.is-calendar .sheet {
+    width: min(100%, 900px);
+    padding: 4px 20px calc(var(--safe-bottom) + 10px);
+  }
+
+  .sheet-layer.is-calendar .sheet__form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+    grid-template-rows: auto 1fr;
+    column-gap: 16px;
+    align-items: start;
+  }
+
+  .sheet-layer.is-calendar .field--name {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .sheet-layer.is-calendar .field--date {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    margin-bottom: 0;
+  }
+
+  /* U pejzažu nema mjesta za ponovljeni datum iznad kalendara. */
+  .sheet-layer.is-calendar .field--date .field__label,
+  .sheet-layer.is-calendar .datefield__toggle {
+    display: none;
+  }
+
+  .sheet-layer.is-calendar .sheet__actions {
+    grid-column: 1;
+    grid-row: 2;
+    align-self: end;
+    position: static;
+    margin-top: 0;
+    padding-top: 8px;
+  }
+
+  .sheet-layer.is-calendar .field {
+    margin-bottom: 8px;
+  }
+
+  .sheet-layer.is-calendar .field__label {
+    margin-bottom: 3px;
+    font-size: 10px;
+  }
+
+  .sheet-layer.is-calendar .datefield__panel {
+    margin-top: 0;
+    padding: 2px;
+  }
+
+  .sheet-layer.is-calendar .datefield__bar {
+    margin-bottom: 2px;
+  }
+
+  .sheet-layer.is-calendar .day {
+    aspect-ratio: auto;
+    height: 24px;
+  }
+
+  .sheet-layer.is-calendar .datefield__actions {
+    margin-top: 2px;
+    padding-top: 2px;
+  }
+
+  .sheet-layer.is-calendar .sheet__actions .btn {
+    padding: 8px 14px;
+  }
+}
+
+/* Najniži pejzažni ekrani (npr. 740×360): još koji piksel manje. */
+@media (min-width: 560px) and (max-height: 400px) {
+  .sheet-layer.is-calendar .sheet {
+    padding-bottom: calc(var(--safe-bottom) + 4px);
+  }
+
+  .sheet__head {
+    margin-bottom: 2px;
+  }
+
+  .sheet__title {
+    font-size: 15px;
+  }
+
+  .sheet-layer.is-calendar .day {
+    height: 23px;
+  }
+
+  .sheet-layer.is-calendar .sheet__actions .btn {
+    padding: 7px 12px;
+  }
 }
 
 .sheet__actions {
@@ -1140,8 +1481,9 @@ ol {
 }
 
 .field__error {
-  margin-top: 6px;
-  font-size: 12.5px;
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.3;
   color: var(--bad);
 }
 
@@ -1170,7 +1512,7 @@ ol {
 }
 
 .input::placeholder {
-  color: var(--ink-4);
+  color: var(--ink-3);
   font-weight: 400;
 }
 .input:focus {
@@ -1385,7 +1727,7 @@ ol {
   font-size: 8.5px;
   font-weight: 700;
   letter-spacing: 0.05em;
-  color: var(--ink-4);
+  color: var(--ink-3);
   line-height: 1.2;
 }
 .day--empty {
@@ -1534,7 +1876,7 @@ ol {
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--ink-4);
+  color: var(--ink-3);
 }
 
 .timer__exam {
@@ -1573,6 +1915,7 @@ ol {
   display: inline-flex;
   align-items: baseline;
   gap: 6px;
+  max-width: 100%;
   padding: 7px 12px;
   border-radius: var(--r-pill);
   border: 1px solid var(--line-strong);
@@ -1581,6 +1924,13 @@ ol {
   font-weight: 600;
   color: var(--ink-2);
   transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+.chip__name {
+  min-width: 0;
+  max-width: 26ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .chip:hover {
   border-color: var(--ink-4);
@@ -1684,7 +2034,7 @@ ol {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--ink-4);
+  color: var(--ink-3);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1753,6 +2103,66 @@ ol {
   background: rgba(255, 255, 255, 0.1);
 }
 
+/* ---------- Tamna tema: kontrast na svijetlim akcentima ----------
+   U tamnoj temi akcenti su svijetli, pa bijeli tekst na njima nije čitljiv.
+   Ovo su iste boje kao u Android verziji, samo sa tamnom tintom preko njih. */
+@media (prefers-color-scheme: dark) {
+  .btn--primary,
+  .btn--primary:hover:not(:disabled),
+  .btn--danger,
+  .fab,
+  .empty__check,
+  .day.is-selected,
+  .timer__toggle,
+  .timer__toggle.is-running {
+    color: #1a120e;
+  }
+
+  .day.is-selected .day__month {
+    color: rgba(26, 18, 14, 0.72);
+  }
+
+  .day.is-selected .day__dot {
+    background: #1a120e;
+  }
+
+  .snackbar--warn,
+  .snackbar--warn .snackbar__action {
+    color: #1a120e;
+  }
+
+  /* Snackbar je u tamnoj temi svijetao, pa narandžasti akcenat nestaje. */
+  .snackbar__action {
+    color: #7a2f16;
+  }
+  .snackbar__action:hover {
+    background: rgba(26, 18, 14, 0.08);
+  }
+}
+
+/* Na kratkim ekranima prazno stanje je bilo više od vidljivog prostora, pa
+   je podnožje završavalo ispod "dock"-a. Skratimo umjetnost i praznine. */
+@media (max-height: 700px) {
+  .empty {
+    padding: 16px 8px 28px;
+  }
+  .empty__art {
+    width: 72px;
+    height: 88px;
+    margin-bottom: 14px;
+  }
+  .empty__title {
+    font-size: 21px;
+  }
+  .empty__text {
+    margin: 4px 0 16px;
+    font-size: 14px;
+  }
+  .foot {
+    padding-top: 16px;
+  }
+}
+
 /* ---------- Sitna podešavanja za male ekrane ---------- */
 
 @media (max-width: 380px) {
@@ -1800,5 +2210,55 @@ ol {
   }
   .timer__stats {
     margin-top: 18px;
+  }
+}
+
+/* Ekstremno nizak pejzaž (npr. 568×320): naslov se sklanja vizuelno, ali
+   ostaje dostupan čitačima ekrana; kalendar dobija svaki piksel. */
+@media (min-width: 560px) and (max-height: 340px) {
+  .sheet__head {
+    margin-bottom: 4px;
+  }
+
+  .sheet__title {
+    font-size: 15px;
+  }
+
+  .field {
+    margin-bottom: 6px;
+  }
+
+  .sheet__actions {
+    margin-top: 6px;
+    padding-top: 6px;
+  }
+
+  .sheet-layer.is-calendar .sheet {
+    padding-top: 10px;
+  }
+
+  .sheet-layer.is-calendar .sheet__head {
+    position: absolute;
+    top: 2px;
+    right: 14px;
+    margin: 0;
+    z-index: 2;
+  }
+
+  .sheet-layer.is-calendar .sheet__head > div {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .sheet-layer.is-calendar .day {
+    height: 23px;
+  }
+
+  .sheet-layer.is-calendar .datefield__panel {
+    padding: 3px;
   }
 }

@@ -109,6 +109,21 @@ export function deleteExam(id: string) {
   });
 }
 
+/**
+ * Vraća obrisani ispit zajedno sa njegovim sesijama učenja. Bez ovoga bi
+ * "Vrati" vratio samo ispit, a zabilježeno vrijeme bi trajno nestalo.
+ */
+export function restoreExam(exam: Exam, sessions: StudySession[]) {
+  const data = getState();
+  if (data.exams.some(e => e.id === exam.id)) return;
+  const known = new Set(data.sessions.map(s => s.id));
+  commit({
+    ...data,
+    exams: [...data.exams, exam],
+    sessions: [...data.sessions, ...sessions.filter(s => !known.has(s.id))],
+  });
+}
+
 export function addSession(session: Omit<StudySession, 'id'>) {
   const data = getState();
   if (session.seconds < 1) return;

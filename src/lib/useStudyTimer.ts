@@ -8,7 +8,12 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-export function useStudyTimer() {
+/**
+ * @param active Da li je ekran sa štopericom otvoren. Interval se vrti samo
+ *   tada; stanje ostaje u roditelju, pa prelazak na drugi ekran ne gubi
+ *   započeto vrijeme. Pri povratku se `now` odmah osvježi.
+ */
+export function useStudyTimer(active = true) {
   /** Akumulirano vrijeme (sekunde) iz prethodnih segmenata učenja. */
   const [accumulated, setAccumulated] = useState(0);
   /** Kada je tekući segment pokrenut; `null` znači pauza. */
@@ -18,16 +23,21 @@ export function useStudyTimer() {
   const running = startedAt !== null;
 
   useEffect(() => {
-    if (startedAt === null) return;
+    if (!active || startedAt === null) return;
+    // Odmah izmjeri proteklo vrijeme (npr. kad se vratimo sa liste ispita).
+    // Kroz `setTimeout(0)` umjesto sinhronog setState-a: React tako ne mora
+    // da radi dodatni render pri svakom montiranju efekta.
+    const immediate = window.setTimeout(() => setNow(Date.now()), 0);
     const id = window.setInterval(() => setNow(Date.now()), 250);
     // Kad se ekran/kartica vrati, odmah osvježi prikaz bez čekanja ticka.
     const onVisible = () => setNow(Date.now());
     document.addEventListener('visibilitychange', onVisible);
     return () => {
+      window.clearTimeout(immediate);
       window.clearInterval(id);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [startedAt]);
+  }, [startedAt, active]);
 
   /** Sekunde tekućeg segmenta (0 kad je pauza). */
   const live = useMemo(
@@ -70,3 +80,5 @@ export function useStudyTimer() {
 
   return { running, elapsed, start, pause, toggle, take, reset };
 }
+
+export type StudyTimerState = ReturnType<typeof useStudyTimer>;

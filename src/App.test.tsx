@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
@@ -23,6 +23,7 @@ async function addExam(user: ReturnType<typeof userEvent.setup>, name: string, o
   // Kalendar je prema zadanim postavkama na današnjem danu; za drugi datum
   // odabiremo konkretan dan po aria-labelu.
   if (offsetDays !== 0) {
+    await user.click(within(dialog).getByRole('button', { name: /danas/ }));
     await user.click(within(dialog).getByRole('button', { name: 'Mjesec' }));
     const target = addDays(todayISO(), offsetDays);
     const [y, m] = target.split('-').map(Number);
@@ -33,6 +34,8 @@ async function addExam(user: ReturnType<typeof userEvent.setup>, name: string, o
     await user.click(within(dialog).getByRole('button', { name: formatLong(target) }));
   }
   await user.click(within(dialog).getByRole('button', { name: 'Dodaj ispit' }));
+  // Sačekaj da se fioka zaista zatvori (animacija je 160ms), kao u stvarnom UI-u.
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 }
 
 describe('Pazi! Ispit — tok korisnika', () => {
@@ -57,6 +60,50 @@ describe('Pazi! Ispit — tok korisnika', () => {
     expect(stored.exams[0]).toMatchObject({ name: 'Anatomija', date: todayISO() });
     // Naučeni predmet ulazi u listu za autocomplete.
     expect(stored.seenSubjects).toContain('Anatomija');
+  });
+
+  it('dodaje ispit za datum izabran u mjesečnom kalendaru', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await addExam(user, 'Fiziologija', 5);
+
+    expect(examCard('Fiziologija')).toBeInTheDocument();
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+    expect(stored.exams[0].date).toBe(addDays(todayISO(), 5));
+  });
+
+  it('mijenja naziv ispita kroz formu za uređivanje', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await addExam(user, 'Anatomija', 0);
+
+    await user.click(examCard('Anatomija'));
+    const dialog = screen.getByRole('dialog');
+    const input = within(dialog).getByLabelText('Predmet');
+    await user.clear(input);
+    await user.type(input, 'Patologija');
+    await user.click(within(dialog).getByRole('button', { name: 'Sačuvaj' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    expect(examCard('Patologija')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Uredi ispit Anatomija' })).not.toBeInTheDocument();
+  });
+
+  it('briše sve podatke iz dijaloga za potvrdu', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await addExam(user, 'Anatomija', 0);
+
+    await user.click(screen.getByRole('button', { name: 'Obriši sve' }));
+    const alert = screen.getByRole('alertdialog');
+    await user.click(within(alert).getByRole('button', { name: 'Obriši sve' }));
+    await act(() => new Promise(resolve => setTimeout(resolve, 50)));
+
+    expect(screen.getByText('Prazna lista')).toBeInTheDocument();
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+    expect(stored.exams).toHaveLength(0);
+    expect(stored.sessions).toHaveLength(0);
   });
 
   it('prikazuje ispit iz localStorage-a nakon ponovnog učitavanja', () => {
@@ -182,5 +229,190 @@ describe('Pazi! Ispit — tok korisnika', () => {
     // Nazad na listu — ispit i dalje tu.
     await user.click(screen.getByRole('button', { name: /Ispiti/ }));
     expect(examCard('Hirurgija')).toBeInTheDocument();
+  });
+
+  it('ne gubi započeto vrijeme kad se vratiš na listu ispita', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await addExam(user, 'Hirurgija', 0);
+
+    await user.click(screen.getByRole('button', { name: /Započni učenje/ }));
+    await user.click(screen.getByRole('button', { name: 'Započni učenje' }));
+
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 1100));
+    });
+    await user.click(screen.getByRole('button', { name: /Ispiti/ }));
+    await user.click(screen.getByRole('button', { name: /Započni učenje/ }));
+
+    // Štoperica je i dalje u toku, a vrijeme nije vraćeno na nulu.
+    expect(screen.getByRole('button', { name: 'Pauza' })).toBeInTheDocument();
+    expect(screen.queryByText('00:00:00')).not.toBeInTheDocument();
+  });
+
+  it('vraća i sesije učenja kad vratiš obrisani ispit', async () => {
+    const now = Date.now();
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        ...emptyData(),
+        exams: [{ id: 'x', name: 'Patologija', date: todayISO(), createdAt: 0 }],
+        sessions: [
+          { id: 's1', examId: 'x', startedAt: now - 60_000, endedAt: now, seconds: 60 },
+        ],
+      }),
+    );
+    refreshFromStorage();
+
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(examCard('Patologija'));
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Obriši' }));
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).sessions).toHaveLength(0);
+
+    await user.click(screen.getByRole('button', { name: 'Vrati' }));
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+    expect(stored.exams).toHaveLength(1);
+    expect(stored.sessions).toHaveLength(1);
+    expect(stored.sessions[0]).toMatchObject({ examId: 'x', seconds: 60 });
+  });
+
+  it('zadržava fokus unutar dijaloga i vraća ga na dugme koje ga je otvorilo', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await addExam(user, 'Anatomija', 0);
+
+    const trigger = screen.getByRole('button', { name: 'Novi ispit' });
+    await user.click(trigger);
+
+    const dialog = screen.getByRole('dialog');
+    // Sa zadnjeg elementa Tab ide na prvi, a Shift+Tab sa prvog na zadnji.
+    const close = within(dialog).getByRole('button', { name: 'Zatvori' });
+    const submit = within(dialog).getByRole('button', { name: 'Dodaj ispit' });
+    submit.focus();
+    fireEvent.keyDown(submit, { key: 'Tab' });
+    expect(document.activeElement).toBe(close);
+    fireEvent.keyDown(close, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(submit);
+
+    await user.keyboard('{Escape}');
+    await act(() => new Promise(resolve => setTimeout(resolve, 200)));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it('zatvara dijalog za brisanje na Escape i vraća fokus', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await addExam(user, 'Anatomija', 0);
+
+    const trigger = screen.getByRole('button', { name: 'Obriši sve' });
+    await user.click(trigger);
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+    expect(document.activeElement).toBe(
+      within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Odustani' }),
+    );
+
+    await user.keyboard('{Escape}');
+    await act(() => new Promise(resolve => setTimeout(resolve, 50)));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it('sklanja listu predloga kad fokus ode na datum', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Novi ispit' }));
+    const dialog = screen.getByRole('dialog');
+    const input = within(dialog).getByLabelText('Predmet');
+
+    await user.type(input, 'ana');
+    expect(within(dialog).getAllByRole('option').length).toBeGreaterThan(0);
+
+    await user.tab();
+    expect(within(dialog).queryByRole('listbox')).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: /oktobar/ }));
+  });
+
+  it('Escape prvo zatvara kalendar, a ne cijeli dijalog', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Novi ispit' }));
+    const dialog = screen.getByRole('dialog');
+
+    await user.click(within(dialog).getByRole('button', { name: /19\. oktobar/ }));
+    expect(within(dialog).getByRole('group', { name: 'Kalendar' })).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+    expect(within(dialog).queryByRole('group', { name: 'Kalendar' })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('ne dodaje isti ispit dvaput na dvostruki klik ili dvostruki Enter', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: 'Novi ispit' }));
+    let dialog = screen.getByRole('dialog');
+    await user.type(within(dialog).getByLabelText('Predmet'), 'Anatomija');
+    const submit = within(dialog).getByRole('button', { name: 'Dodaj ispit' });
+    fireEvent.click(submit);
+    fireEvent.click(submit);
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'Novi ispit' }));
+    dialog = screen.getByRole('dialog');
+    await user.type(within(dialog).getByLabelText('Predmet'), 'Fiziologija{Enter}{Enter}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+    expect(stored.exams.map((e: { name: string }) => e.name)).toEqual(['Anatomija', 'Fiziologija']);
+  });
+
+  it('nudi sve predstojeće ispite u štoperici, ne samo prva četiri', async () => {
+    const exams = Array.from({ length: 6 }, (_, i) => ({
+      id: `e${i}`,
+      name: `Predmet ${i + 1}`,
+      date: addDays(todayISO(), i + 1),
+      createdAt: i,
+    }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...emptyData(), exams }));
+    refreshFromStorage();
+
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: /Započni učenje/ }));
+
+    expect(within(screen.getByRole('listbox', { name: 'Odaberi ispit' })).getAllByRole('option')).toHaveLength(6);
+  });
+
+  it('ne mijenja izabrani ispit kad se timer otvori preko donjeg dugmeta', async () => {
+    const exams = [
+      { id: 'a', name: 'Anatomija', date: todayISO(), createdAt: 0 },
+      { id: 'f', name: 'Fiziologija', date: addDays(todayISO(), 3), createdAt: 1 },
+    ];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...emptyData(), exams }));
+    refreshFromStorage();
+
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: 'Uči Fiziologija' }));
+    const list = screen.getByRole('listbox', { name: 'Odaberi ispit' });
+    expect(within(list).getByRole('option', { name: /Fiziologija/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    await user.click(screen.getByRole('button', { name: /Ispiti/ }));
+    await user.click(screen.getByRole('button', { name: /Započni učenje/ }));
+
+    // "Dock" otvara timer, ali ne smije prebaciti na najbliži ispit.
+    expect(
+      within(screen.getByRole('listbox', { name: 'Odaberi ispit' })).getByRole('option', {
+        name: /Fiziologija/,
+      }),
+    ).toHaveAttribute('aria-selected', 'true');
   });
 });

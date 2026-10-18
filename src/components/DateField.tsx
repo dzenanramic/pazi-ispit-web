@@ -3,7 +3,7 @@
  * nego se otvara na sedmicu — do ispita se obično mjeri u danima, pa je
  * sedmica najbrža za odabir, a prelazak na mjesec je jedan dodir.
  */
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   MONTHS,
   MONTHS_SHORT,
@@ -16,7 +16,7 @@ import {
   todayISO,
   toISODate,
 } from '../lib/date';
-import { IconChevronLeft } from './Icons';
+import { IconCheck, IconChevronLeft } from './Icons';
 import { relativeChip } from '../lib/date';
 
 type Props = {
@@ -25,11 +25,14 @@ type Props = {
   /** Datumi koji imaju ispit — prikazuju se kao tačkica. */
   markedDates?: Set<string>;
   min?: string;
+  /** Prijavljuje roditelju da je kalendar otvoren (za raspored dijaloga). */
+  onOpenChange?: (open: boolean) => void;
 };
 
-export function DateField({ value, onChange, markedDates, min }: Props) {
+export function DateField({ value, onChange, markedDates, min, onOpenChange }: Props) {
   const [mode, setMode] = useState<'week' | 'month'>('week');
   const [open, setOpen] = useState(false);
+  const toggleRef = useRef<HTMLButtonElement>(null);
   const today = todayISO();
 
   // Mjesec koji se prikazuje; postavlja se na odabrani datum pri otvaranju kalendara.
@@ -60,34 +63,60 @@ export function DateField({ value, onChange, markedDates, min }: Props) {
     onChange(iso);
   };
 
+  function setPanelOpen(next: boolean) {
+    setOpen(next);
+    onOpenChange?.(next);
+  }
+
+  function closePanel() {
+    setPanelOpen(false);
+    // Fokus se vraća na polje datuma, ne na skriveni dan u kalendaru.
+    window.setTimeout(() => toggleRef.current?.focus({ preventScroll: true }), 0);
+  }
+
   // Funkcionalno ažuriranje: brzi uzastopni klikovi na strelice se ne guraju
   // jedan preko drugog (svaki bi inače krenuo od zastarjelog `cursor`).
   const shiftCursor = (delta: number) => setCursor(c => shiftMonth(c, delta));
 
   return (
-    <div className="datefield">
+    <div
+      className="datefield"
+      onKeyDown={e => {
+        // Escape prvo zatvara kalendar; tek sljedeći Escape zatvara fioku.
+        if (open && e.key === 'Escape') {
+          e.preventDefault();
+          e.stopPropagation();
+          closePanel();
+        }
+      }}
+    >
       <button
         type="button"
+        ref={toggleRef}
         className="datefield__toggle"
         onClick={() => {
           if (!open) setCursor(value);
-          setOpen(o => !o);
+          setPanelOpen(!open);
         }}
         aria-expanded={open}
-        aria-controls="datefield-panel"
+        aria-controls={open ? 'datefield-panel' : undefined}
       >
         <span className="datefield__value">{formatLong(value)}</span>
         <span className="datefield__chip">{relativeChip(value)}</span>
       </button>
 
       {open && (
-        <div className={`datefield__panel datefield__panel--${mode}`} id="datefield-panel">
+        <div
+          className={`datefield__panel datefield__panel--${mode}`}
+          id="datefield-panel"
+          role="group"
+          aria-label="Kalendar"
+        >
           <div className="datefield__bar">
-            <div className="segmented" role="tablist" aria-label="Prikaz kalendara">
+            <div className="segmented" role="group" aria-label="Prikaz kalendara">
               <button
                 type="button"
-                role="tab"
-                aria-selected={mode === 'week'}
+                aria-pressed={mode === 'week'}
                 className={mode === 'week' ? 'is-active' : ''}
                 onClick={() => {
                   setMode('week');
@@ -98,8 +127,7 @@ export function DateField({ value, onChange, markedDates, min }: Props) {
               </button>
               <button
                 type="button"
-                role="tab"
-                aria-selected={mode === 'month'}
+                aria-pressed={mode === 'month'}
                 className={mode === 'month' ? 'is-active' : ''}
                 onClick={() => setMode('month')}
               >
@@ -182,6 +210,10 @@ export function DateField({ value, onChange, markedDates, min }: Props) {
               }}
             >
               {mode === 'week' ? 'Za sedmicu' : 'Za mjesec'}
+            </button>
+            <button type="button" className="linkbtn linkbtn--done" onClick={closePanel}>
+              <IconCheck size={15} />
+              Gotovo
             </button>
           </div>
         </div>

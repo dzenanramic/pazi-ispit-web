@@ -1,39 +1,116 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   PERSIST_FAILED_EVENT,
   addExam,
   clearAll,
   deleteExam,
+  restoreExam,
   updateExam,
   useSortedExams,
   useStore,
 } from './lib/store';
 import { dayKey, daysUntil, formatDuration, isPast } from './lib/date';
-import type { Exam } from './lib/storage';
+import type { Exam, StudySession } from './lib/storage';
 import { ExamCard } from './components/ExamCard';
 import { ExamSheet } from './components/ExamSheet';
 import { StudyTimer } from './components/StudyTimer';
 import { AppMark, IconPlus, IconTimer } from './components/Icons';
 import { useTodayKey } from './lib/useTodayKey';
+import { useStudyTimer } from './lib/useStudyTimer';
+import { useDialogFocus } from './lib/useDialogFocus';
 
-type View = { screen: 'home' } | { screen: 'timer'; examId: string | null };
+type View = 'home' | 'timer';
 
 type SheetState = { mode: 'add' } | { mode: 'edit'; exam: Exam } | null;
 
 export default function App() {
   const exams = useSortedExams();
   const { sessions } = useStore();
-  const [view, setView] = useState<View>({ screen: 'home' });
+  const [view, setView] = useState<View>('home');
   const [sheet, setSheet] = useState<SheetState>(null);
-  const [undo, setUndo] = useState<{ exam: Exam; timer: number } | null>(null);
+  const [undo, setUndo] = useState<{ exam: Exam; sessions: StudySession[]; timer: number } | null>(
+    null,
+  );
   const [confirmClear, setConfirmClear] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
+
+  // Štoperica živi u App-u, ne u ekranu za učenje: prelazak na listu i nazad
+  // ne smije izgubiti započeto vrijeme. Interval se vrti samo dok je timer
+  // otvoren; proteklo vrijeme se ionako računa iz vremenske oznake.
+  const timer = useStudyTimer(view === 'timer');
+  const [timerExamId, setTimerExamId] = useState<string | null>(null);
+  const clearDialogRef = useRef<HTMLDivElement>(null);
+  const clearCancelRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const onFail = () => setSaveFailed(true);
     window.addEventListener(PERSIST_FAILED_EVENT, onFail);
     return () => window.removeEventListener(PERSIST_FAILED_EVENT, onFail);
   }, []);
+
+  useEffect(() => {
+    if (!confirmClear) return;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [confirmClear]);
+
+  useDialogFocus({
+    active: confirmClear,
+    containerRef: clearDialogRef,
+    onClose: () => setConfirmClear(false),
+    initialFocusRef: clearCancelRef,
+  });
+
+  // Ekran učenja dobija svoj unos u historiji: sistemsko/browser "nazad"
+  // vraća na listu ispita umjesto da izađe iz aplikacije.
+  useEffect(() => {
+    // Osvježavanje stranice uvijek počinje na listi; očisti zaostali unos.
+    if (window.history.state?.screen === 'timer') {
+      window.history.replaceState({ screen: 'home' }, '');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (view !== 'timer' || window.history.state?.screen === 'timer') return;
+    window.history.pushState({ screen: 'timer' }, '');
+  }, [view]);
+
+  useEffect(() => {
+    const onPop = (event: PopStateEvent) => {
+      setView(event.state?.screen === 'timer' ? 'timer' : 'home');
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  useEffect(() => {
+    document.title = view === 'timer' ? 'Učenje — Pazi! Ispit' : 'Pazi! Ispit';
+  }, [view]);
+
+  /** Otvara timer za konkretan ispit (klik na "Uči" ili karticu "Sljedeće"). */
+  function openTimerFor(examId: string) {
+    setTimerExamId(examId);
+    setView('timer');
+  }
+
+  /** Otvara timer bez mijenjanja već izabranog ispita (donji "dock"). */
+  function openTimer() {
+    if (!timerExamId) setTimerExamId(next?.id ?? null);
+    setView('timer');
+  }
+
+  function closeConfirm() {
+    setConfirmClear(false);
+  }
+
+  function goHome() {
+    // Ako postoji naš unos u historiji, vrati se kroz nju da i sistemsko
+    // "nazad" i dugme u aplikaciji ostanu u istom stanju.
+    if (window.history.state?.screen === 'timer') window.history.back();
+    setView('home');
+  }
 
   const upcoming = useMemo(() => exams.filter(e => !isPast(e.date)), [exams]);
   const past = useMemo(() => exams.filter(e => isPast(e.date)), [exams]);
@@ -42,11 +119,13 @@ export default function App() {
 
   const today = useTodayKey();
   const studiedToday = useMemo(() => {
-    // `today` je već ključ dana; prebrojavamo sesije od ponoći lokalno.
-    return sessions
+    // `today` je već ključ dana; prebrojavamo sesije od ponoći lokalno, plus
+    // eventualnu sesiju koja je upravo u toku (još nije sačuvana).
+    const saved = sessions
       .filter(s => dayKey(s.endedAt) === today)
       .reduce((sum, s) => sum + s.seconds, 0);
-  }, [sessions, today]);
+    return saved + timer.elapsed;
+  }, [sessions, today, timer.elapsed]);
 
   function handleSubmit(draft: { name: string; date: string }) {
     if (sheet?.mode === 'edit') updateExam(sheet.exam.id, draft);
@@ -54,18 +133,31 @@ export default function App() {
   }
 
   function handleDelete(exam: Exam) {
+    const deletedSessions = sessions.filter(s => s.examId === exam.id);
     deleteExam(exam.id);
+    if (timerExamId === exam.id) setTimerExamId(null);
     setSheet(null);
     if (undo) window.clearTimeout(undo.timer);
-    const timer = window.setTimeout(() => setUndo(null), 6000);
-    setUndo({ exam, timer });
+    const undoTimer = window.setTimeout(() => setUndo(null), 6000);
+    setUndo({ exam, sessions: deletedSessions, timer: undoTimer });
   }
 
   function undoDelete() {
     if (!undo) return;
     window.clearTimeout(undo.timer);
-    addExam({ name: undo.exam.name, date: undo.exam.date });
+    restoreExam(undo.exam, undo.sessions);
     setUndo(null);
+  }
+
+  function clearEverything() {
+    // "Obriši sve" mora poništiti i ponudu "Vrati" — inače bi se obrisani
+    // ispit mogao vratiti odmah nakon brisanja svih podataka.
+    if (undo) window.clearTimeout(undo.timer);
+    setUndo(null);
+    setTimerExamId(null);
+    timer.reset();
+    clearAll();
+    setConfirmClear(false);
   }
 
   return (
@@ -74,7 +166,7 @@ export default function App() {
         Preskoči na sadržaj
       </a>
 
-      {view.screen === 'home' ? (
+      {view === 'home' ? (
         <main id="main" className="page" key="home">
           <header className="masthead">
             <div className="brand">
@@ -100,7 +192,7 @@ export default function App() {
           </header>
 
           {next && (
-            <NextUp exam={next} onOpen={() => setView({ screen: 'timer', examId: next.id })} />
+            <NextUp exam={next} onOpen={() => openTimerFor(next.id)} />
           )}
 
           {exams.length === 0 ? (
@@ -122,7 +214,7 @@ export default function App() {
                         exam={exam}
                         index={i}
                         onEdit={e => setSheet({ mode: 'edit', exam: e })}
-                        onStudy={e => setView({ screen: 'timer', examId: e.id })}
+                        onStudy={e => openTimerFor(e.id)}
                       />
                     ))}
                   </ul>
@@ -174,7 +266,7 @@ export default function App() {
           <button
             type="button"
             className="dock"
-            onClick={() => setView({ screen: 'timer', examId: next?.id ?? null })}
+            onClick={() => openTimer()}
           >
             <IconTimer size={19} />
             <span>Započni učenje</span>
@@ -187,7 +279,7 @@ export default function App() {
             <button
               type="button"
               className="subhead__back"
-              onClick={() => setView({ screen: 'home' })}
+              onClick={goHome}
             >
               <span className="subhead__arrow" aria-hidden>
                 ←
@@ -196,11 +288,12 @@ export default function App() {
             </button>
             <h2 className="subhead__title">Učenje</h2>
           </header>
-          <StudyTimer initialExamId={view.examId} />
+          <StudyTimer timer={timer} examId={timerExamId} onExamChange={setTimerExamId} />
         </main>
       )}
 
       <ExamSheet
+        key={sheet ? (sheet.mode === 'edit' ? `edit:${sheet.exam.id}` : 'add') : 'closed'}
         open={sheet !== null}
         mode={sheet?.mode ?? 'add'}
         initial={
@@ -235,7 +328,7 @@ export default function App() {
           <button
             type="button"
             className="sheet-backdrop"
-            onClick={() => setConfirmClear(false)}
+            onClick={closeConfirm}
             aria-label="Zatvori"
             tabIndex={-1}
           />
@@ -244,6 +337,8 @@ export default function App() {
             role="alertdialog"
             aria-modal="true"
             aria-labelledby="clear-h"
+            ref={clearDialogRef}
+            tabIndex={-1}
           >
             <h2 id="clear-h" className="sheet__title">
               Obrisati sve podatke?
@@ -253,17 +348,15 @@ export default function App() {
               poništiti.
             </p>
             <div className="sheet__actions">
-              <button type="button" className="btn btn--ghost" onClick={() => setConfirmClear(false)}>
-                Odustani
-              </button>
               <button
                 type="button"
-                className="btn btn--danger"
-                onClick={() => {
-                  clearAll();
-                  setConfirmClear(false);
-                }}
+                className="btn btn--ghost"
+                ref={clearCancelRef}
+                onClick={closeConfirm}
               >
+                Odustani
+              </button>
+              <button type="button" className="btn btn--danger" onClick={clearEverything}>
                 Obriši sve
               </button>
             </div>

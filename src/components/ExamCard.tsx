@@ -10,7 +10,7 @@ type Props = {
 };
 
 /** Ime mjeseca u kratkom obliku za blok datuma na kartici. */
-const MONTH_ABBR = ['JAN', 'FEB', 'MAR', 'APR', 'MAJ', 'JUN', 'JUL', 'AVG', 'SEP', 'OKT', 'NOV', 'DEC'];
+const MONTH_ABBR = ['JAN', 'FEB', 'MAR', 'APR', 'MAJ', 'JUN', 'JUL', 'AUG', 'SEP', 'OKT', 'NOV', 'DEC'];
 
 export function ExamCard({ exam, onEdit, onStudy, index = 0 }: Props) {
   const urgency = urgencyOf(exam.date);
@@ -35,7 +35,9 @@ export function ExamCard({ exam, onEdit, onStudy, index = 0 }: Props) {
         </span>
 
         <span className="exam__body">
-          <span className="exam__name">{exam.name}</span>
+          <span className="exam__name" title={exam.name}>
+            {exam.name}
+          </span>
           <span className="exam__meta">
             <span className="exam__weekday">{weekdayName(exam.date)}, </span>
             {formatShort(exam.date)}
@@ -49,7 +51,12 @@ export function ExamCard({ exam, onEdit, onStudy, index = 0 }: Props) {
       </button>
 
       {onStudy && n >= 0 && (
-        <button type="button" className="exam__tool" onClick={() => onStudy(exam)}>
+        <button
+          type="button"
+          className="exam__tool"
+          onClick={() => onStudy(exam)}
+          aria-label={`Uči ${exam.name}`}
+        >
           Uči
         </button>
       )}
