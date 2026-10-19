@@ -3,7 +3,7 @@
  * a upis ide isključivo kroz akcije ispod — tako nema duplih zapisa i nema
  * neusklađenosti između liste i localStorage-a.
  */
-import { useCallback, useSyncExternalStore } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
 import {
   type AppData,
   type Exam,
@@ -15,6 +15,8 @@ import {
   save,
   sortExams,
 } from './storage';
+import { fromISODate } from './date';
+import { useToday } from './useTodayKey';
 
 type Listener = () => void;
 
@@ -144,7 +146,9 @@ export function useStore() {
 /** Ispiti sortirani za prikaz (najbliži prvo, prošli na kraju). */
 export function useSortedExams() {
   const { exams } = useStore();
-  return useCallback(() => sortExams(exams), [exams])();
+  // `iso` je u zavisnostima da se lista sama presloži u ponoć.
+  const { iso } = useToday();
+  return useMemo(() => sortExams(exams, fromISODate(iso)), [exams, iso]);
 }
 
 /** Predmeti za autocomplete: šta je već korišteno pa zatim gotova lista. */

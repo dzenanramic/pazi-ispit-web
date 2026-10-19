@@ -211,8 +211,8 @@ export function DateField({ value, onChange, markedDates, min, onOpenChange }: P
               type="button"
               className="linkbtn"
               onClick={() => {
-                const base = mode === 'week' ? value : cursor;
-                const target = addDays(base, mode === 'week' ? 7 : 30);
+                // "Za mjesec" je jedan kalendarski mjesec, ne 30 dana.
+                const target = mode === 'week' ? addDays(value, 7) : shiftMonth(cursor, 1);
                 pick(target);
                 setCursor(target);
               }}

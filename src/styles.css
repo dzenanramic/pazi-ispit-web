@@ -1723,7 +1723,7 @@ ol {
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.04em;
-  color: var(--ink-4);
+  color: var(--ink-3);
   text-transform: uppercase;
 }
 
@@ -1987,7 +1987,10 @@ ol {
   font-family: var(--font-mono);
   font-size: 10.5px;
   font-weight: 500;
-  opacity: 0.62;
+  /* Datum je sekundaran, ali mora ostati čitljiv (WCAG AA): nasljeđuje boju
+     chipa i samo je blago utišan. */
+  color: inherit;
+  opacity: 0.9;
 }
 
 .timer__header {
@@ -2031,7 +2034,9 @@ ol {
   color: var(--ink-3);
   background: var(--card-sunk);
   border: 1px solid var(--line);
-  transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+  /* Boja teksta i podloge se mijenjaju trenutno: u toku prelaza bijeli tekst
+     na još svijetloj podlozi ne prolazi WCAG kontrast. */
+  transition: border-color 0.14s ease;
 }
 .timer__mode-btn:hover {
   background: var(--accent-tint);
@@ -2042,18 +2047,6 @@ ol {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff8f3;
-}
-
-.timer__pomodoro-summary {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-  padding: 6px 12px;
-  background: var(--card-sunk);
-  border: 1px solid var(--line);
-  border-radius: var(--r-pill);
-  font-size: 12px;
 }
 
 .timer__pomodoro-item {

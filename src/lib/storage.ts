@@ -4,7 +4,7 @@
  * Ključevi su isti kao u Android verziji (`exams`, `timer`) pa se ista
  * struktura podataka lako seli u oba smjera.
  */
-import { todayISO } from './date';
+import { fromISODate, toISODate, todayISO } from './date';
 
 export type Exam = {
   id: string;
@@ -83,12 +83,12 @@ export function capitalize(s: string): string {
 const isExam = (v: unknown): v is Exam => {
   if (!v || typeof v !== 'object') return false;
   const e = v as Record<string, unknown>;
-  return (
-    typeof e.id === 'string' &&
-    typeof e.name === 'string' &&
-    typeof e.date === 'string' &&
-    /^\d{4}-\d{2}-\d{2}$/.test(e.date)
-  );
+  if (typeof e.id !== 'string' || typeof e.name !== 'string' || typeof e.date !== 'string') {
+    return false;
+  }
+  // Regex sam po sebi propušta 2026-02-31; round-trip odbija nemoguće datume.
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(e.date)) return false;
+  return toISODate(fromISODate(e.date)) === e.date;
 };
 
 const isSession = (v: unknown): v is StudySession => {
@@ -96,10 +96,14 @@ const isSession = (v: unknown): v is StudySession => {
   const s = v as Record<string, unknown>;
   return (
     typeof s.id === 'string' &&
+    (s.examId === null || typeof s.examId === 'string') &&
     typeof s.seconds === 'number' &&
     Number.isFinite(s.seconds) &&
+    s.seconds >= 0 &&
     typeof s.startedAt === 'number' &&
-    typeof s.endedAt === 'number'
+    Number.isFinite(s.startedAt) &&
+    typeof s.endedAt === 'number' &&
+    Number.isFinite(s.endedAt)
   );
 };
 
