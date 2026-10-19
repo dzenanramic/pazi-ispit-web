@@ -249,24 +249,26 @@ export function StudyTimer({ timer, examId, onExamChange }: Props) {
     <div className="timer">
       <div className="timer__header">
         <div className="timer__mode-toggle">
-          <button
-            type="button"
-            className={`timer__mode-btn ${pomodoroEnabled ? 'is-active' : ''}`}
-            onClick={handlePomodoroToggle}
-            aria-pressed={pomodoroEnabled}
-          >
-            <IconRepeat size={18} />
-            <span>Pomodoro</span>
-          </button>
-          <button
-            type="button"
-            className="iconbtn iconbtn--sm"
-            onClick={() => setShowPomodoroSettings(true)}
-            aria-label="Podešavanja Pomodoro"
-            disabled={pomodoroEnabled && timer.running}
-          >
-            <IconTimer size={18} />
-          </button>
+          <div className="timer__mode-row">
+            <button
+              type="button"
+              className={`timer__mode-btn ${pomodoroEnabled ? 'is-active' : ''}`}
+              onClick={handlePomodoroToggle}
+              aria-pressed={pomodoroEnabled}
+            >
+              <IconRepeat size={18} />
+              <span>Pomodoro</span>
+            </button>
+            <button
+              type="button"
+              className="iconbtn iconbtn--sm"
+              onClick={() => setShowPomodoroSettings(true)}
+              aria-label="Podešavanja Pomodoro"
+              disabled={pomodoroEnabled && timer.running}
+            >
+              <IconTimer size={18} />
+            </button>
+          </div>
         </div>
         {pomodoroEnabled && (
           <div className="timer__pomodoro-summary">
