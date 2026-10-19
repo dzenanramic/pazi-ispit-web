@@ -154,15 +154,20 @@ export function StudyTimer({ timer, examId, onExamChange }: Props) {
     if (currentPhase === 'study') {
       setCompletedCycles(c => c + 1);
       setCurrentPhase('rest');
-      setPhaseEndTime(Date.now() + restDuration * 1000);
+      // Don't set phaseEndTime yet - wait until timer actually starts
       if (pomodoroSettings.autoStartBreaks) {
         timer.start();
+        setPhaseEndTime(Date.now() + restDuration * 1000);
+      } else {
+        setPhaseEndTime(null);
       }
     } else {
       setCurrentPhase('study');
-      setPhaseEndTime(Date.now() + studyDuration * 1000);
       if (pomodoroSettings.autoStartStudies) {
         timer.start();
+        setPhaseEndTime(Date.now() + studyDuration * 1000);
+      } else {
+        setPhaseEndTime(null);
       }
     }
   }, [pomodoroEnabled, pomodoroSettings, currentPhase, studyDuration, restDuration, timer]);
@@ -226,9 +231,10 @@ export function StudyTimer({ timer, examId, onExamChange }: Props) {
   const handleTimerStart = useCallback(() => {
     timer.start();
     if (pomodoroEnabled && !phaseEndTime) {
-      setPhaseEndTime(Date.now() + studyDuration * 1000);
+      const duration = currentPhase === 'study' ? studyDuration : restDuration;
+      setPhaseEndTime(Date.now() + duration * 1000);
     }
-  }, [timer, pomodoroEnabled, phaseEndTime, studyDuration]);
+  }, [timer, pomodoroEnabled, phaseEndTime, currentPhase, studyDuration, restDuration]);
 
   const handleTimerPause = useCallback(() => {
     timer.pause();
