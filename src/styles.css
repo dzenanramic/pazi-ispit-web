@@ -242,6 +242,8 @@ ol {
 
 .page--timer {
   padding-bottom: calc(var(--safe-bottom) + 32px);
+  height: 100dvh;
+  overflow: hidden;
 }
 
 /* ---------- Zaglavlje ---------- */
