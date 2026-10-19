@@ -1713,8 +1713,11 @@ ol {
   color: var(--ink-2);
   transition: background-color 0.12s ease, color 0.12s ease;
 }
-.day:hover:not(:disabled) {
+.day:hover:not(:disabled):not(.is-selected) {
   background: var(--card);
+}
+.day:active:not(:disabled):not(.is-selected) {
+  background: var(--card-sunk);
 }
 .day__num {
   font-family: var(--font-mono);
@@ -1740,7 +1743,15 @@ ol {
 .day.is-selected {
   background: var(--accent);
   color: #fff8f3;
-  box-shadow: var(--shadow-1), 0 0 0 2px #fff8f3, 0 0 0 4px var(--accent);
+  box-shadow: var(--shadow-1);
+}
+.day.is-selected::before {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: 7px;
+  background: var(--accent);
+  z-index: -1;
 }
 .day.is-selected .day__month {
   color: rgba(255, 248, 243, 0.78);
