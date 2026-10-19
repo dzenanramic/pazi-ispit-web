@@ -53,6 +53,35 @@ describe('parseData', () => {
     expect(data.sessions).toEqual([]);
     expect(data.seenSubjects).toEqual([]);
   });
+
+  it('odbacuje nemoguće datume, a zadržava valjane', () => {
+    const data = parseData(
+      JSON.stringify({
+        exams: [
+          exam('1', 'Feb31', '2026-02-31'),
+          exam('2', 'Month13', '2026-13-01'),
+          exam('3', 'Prijestupna', '2026-02-29'), // 2026. nije prijestupna
+          exam('4', 'Feb28', '2026-02-28'),
+          exam('5', 'Prijestupna24', '2024-02-29'),
+        ],
+      }),
+    );
+    expect(data.exams.map(e => e.name)).toEqual(['Feb28', 'Prijestupna24']);
+  });
+
+  it('odbacuje sesije sa negativnim trajanjem ili pogrešnim examId', () => {
+    const data = parseData(
+      JSON.stringify({
+        sessions: [
+          { id: 'ok', examId: null, startedAt: 0, endedAt: 1000, seconds: 1 },
+          { id: 'neg', examId: null, startedAt: 0, endedAt: 1000, seconds: -5 },
+          { id: 'bad-exam', examId: 42, startedAt: 0, endedAt: 1000, seconds: 5 },
+          { id: 'bad-time', examId: null, startedAt: 'juče', endedAt: 1000, seconds: 5 },
+        ],
+      }),
+    );
+    expect(data.sessions.map(s => s.id)).toEqual(['ok']);
+  });
 });
 
 describe('sortExams', () => {

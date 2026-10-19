@@ -61,6 +61,7 @@ def sheet_metrics(page):
           toggleHidden: getComputedStyle(document.querySelector('.datefield__toggle')).display === 'none',
           dateActionsOverlap: overlaps,
           sixRows: document.querySelectorAll('.datefield__row').length === 6,
+          gridHeight: Math.round(document.querySelector('.datefield__grid')?.getBoundingClientRect().height ?? 0),
         };
       }"""
     )
@@ -112,13 +113,21 @@ def run_case(browser, width, height, mobile, errors):
     check(month["overflow"] <= 1, f"{label}: mjesec staje ({month['overflow']}px)")
     check(not month["dateActionsOverlap"], f"{label}: prečice mjeseca nisu prekrivene")
 
-    # Novembar 2026. ima šest sedmica — najviši mogući kalendar.
+    # Sljedeći mjesec: UI uvijek renderuje šest redova, pa provjeravamo da
+    # visina ne zavisi od prirodnog broja sedmica (5 ili 6).
     page.get_by_role("button", name="Sljedeći mjesec").click()
     page.wait_for_timeout(150)
     six = sheet_metrics(page)
-    check(six["sixRows"], f"{label}: prikazan mjesec sa šest redova")
+    check(six["sixRows"], f"{label}: kalendar ima fiksnih šest redova")
     check(six["overflow"] <= 1, f"{label}: mjesec sa šest redova staje ({six['overflow']}px)")
     check(not six["dateActionsOverlap"], f"{label}: prečice šestorednog mjeseca nisu prekrivene")
+    # Suština popravke nije broj redova (uvijek je šest), nego to da visina
+    # kalendara ne skače između mjeseca sa pet i mjeseca sa šest sedmica.
+    check(
+        abs(month["gridHeight"] - six["gridHeight"]) <= 1,
+        f"{label}: visina kalendara je stabilna između mjeseci "
+        f"({month['gridHeight']}px → {six['gridHeight']}px)",
+    )
 
     if width >= 800 and height >= 560:
         check(six["formDisplay"] == "grid", f"{label}: desktop koristi dva stupca")

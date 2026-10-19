@@ -15,6 +15,13 @@ beforeEach(() => {
 /** Kartica ispita u listi (ime se pojavljuje i u naslovu "Sljedeće"). */
 const examCard = (name: string) => screen.getByRole('button', { name: `Uredi ispit ${name}` });
 
+/**
+ * Dugme datuma ima naziv "19. oktobar 2026. danas". Naziv se računa iz
+ * današnjeg datuma, da test ne bi padao prvog dana drugog mjeseca.
+ */
+const dateToggleName = () =>
+  new RegExp(formatLong(todayISO()).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+
 async function addExam(user: ReturnType<typeof userEvent.setup>, name: string, offsetDays: number) {
   await user.click(screen.getByRole('button', { name: 'Novi ispit' }));
   const dialog = screen.getByRole('dialog');
@@ -332,7 +339,7 @@ describe('Pazi! Ispit — tok korisnika', () => {
 
     await user.tab();
     expect(within(dialog).queryByRole('listbox')).not.toBeInTheDocument();
-    expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: /oktobar/ }));
+    expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: dateToggleName() }));
   });
 
   it('Escape prvo zatvara kalendar, a ne cijeli dijalog', async () => {
@@ -341,7 +348,7 @@ describe('Pazi! Ispit — tok korisnika', () => {
     await user.click(screen.getByRole('button', { name: 'Novi ispit' }));
     const dialog = screen.getByRole('dialog');
 
-    await user.click(within(dialog).getByRole('button', { name: /19\. oktobar/ }));
+    await user.click(within(dialog).getByRole('button', { name: dateToggleName() }));
     expect(within(dialog).getByRole('group', { name: 'Kalendar' })).toBeInTheDocument();
 
     await user.keyboard('{Escape}');
