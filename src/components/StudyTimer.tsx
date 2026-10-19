@@ -10,6 +10,7 @@ import type { StudyTimerState } from '../lib/useStudyTimer';
 import { useTodayKey } from '../lib/useTodayKey';
 import { IconPause, IconPlay, IconUndo } from './Icons';
 
+
 type Props = {
   timer: StudyTimerState;
   examId: string | null;
@@ -19,6 +20,7 @@ type Props = {
 export function StudyTimer({ timer, examId, onExamChange }: Props) {
   const { exams, sessions } = useStore();
   const [savedToast, setSavedToast] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const upcoming = useMemo(() => sortExams(exams).filter(e => e.date >= todayISO()), [exams]);
   const selected = upcoming.find(e => e.id === examId) ?? null;
@@ -100,7 +102,12 @@ export function StudyTimer({ timer, examId, onExamChange }: Props) {
       </div>
 
       <div className="timer__controls">
-        <button type="button" className="timer__reset" onClick={timer.reset} disabled={timer.elapsed === 0}>
+        <button
+          type="button"
+          className="timer__reset"
+          onClick={() => timer.elapsed > 0 && setShowResetConfirm(true)}
+          disabled={timer.elapsed === 0}
+        >
           <IconUndo size={17} />
           Reset
         </button>
@@ -131,6 +138,49 @@ export function StudyTimer({ timer, examId, onExamChange }: Props) {
       {savedToast && (
         <div className="toast" role="status">
           Sesija sačuvana.
+        </div>
+      )}
+
+      {showResetConfirm && (
+        <div className="sheet-layer" role="alertdialog" aria-modal="true" aria-labelledby="reset-confirm-title">
+          <button
+            type="button"
+            className="sheet-backdrop"
+            onClick={() => setShowResetConfirm(false)}
+            aria-label="Zatvori"
+            tabIndex={-1}
+          />
+          <div
+            className="sheet sheet--confirm"
+            role="document"
+            tabIndex={-1}
+          >
+            <h2 id="reset-confirm-title" className="sheet__title">
+              Ponistiti učenje?
+            </h2>
+            <p className="sheet__text">
+              Vrijeme od {formatClock(timer.elapsed)} će se izgubiti. Ovo se ne može poništiti.
+            </p>
+            <div className="sheet__actions">
+              <button
+                type="button"
+                className="btn btn--ghost"
+                onClick={() => setShowResetConfirm(false)}
+              >
+                Odustani
+              </button>
+              <button
+                type="button"
+                className="btn btn--danger"
+                onClick={() => {
+                  timer.reset();
+                  setShowResetConfirm(false);
+                }}
+              >
+                Ponisti
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

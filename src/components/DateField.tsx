@@ -56,7 +56,14 @@ export function DateField({ value, onChange, markedDates, min, onOpenChange }: P
   }, [weeks, value]);
 
   const visibleWeeks = weeks.slice(weekOffset, weekOffset + 3);
-  const monthWeeks = useMemo(() => monthGrid(cursor), [cursor]);
+  const monthWeeks = useMemo(() => {
+    const weeks = monthGrid(cursor);
+    // Always return 6 rows to prevent height jumping between 5 and 6 week months
+    while (weeks.length < 6) {
+      weeks.push(Array.from({ length: 7 }, () => null));
+    }
+    return weeks;
+  }, [cursor]);
 
   const pick = (iso: string) => {
     if (iso < minIso) return;
@@ -204,7 +211,8 @@ export function DateField({ value, onChange, markedDates, min, onOpenChange }: P
               type="button"
               className="linkbtn"
               onClick={() => {
-                const target = addDays(today, mode === 'week' ? 7 : 30);
+                const base = mode === 'week' ? value : cursor;
+                const target = addDays(base, mode === 'week' ? 7 : 30);
                 pick(target);
                 setCursor(target);
               }}

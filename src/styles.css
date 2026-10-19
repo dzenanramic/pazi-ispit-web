@@ -1740,7 +1740,7 @@ ol {
 .day.is-selected {
   background: var(--accent);
   color: #fff8f3;
-  box-shadow: var(--shadow-1);
+  box-shadow: var(--shadow-1), 0 0 0 2px #fff8f3, 0 0 0 4px var(--accent);
 }
 .day.is-selected .day__month {
   color: rgba(255, 248, 243, 0.78);
@@ -2067,6 +2067,20 @@ ol {
   box-shadow: var(--shadow-3);
   animation: snack-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
   max-width: calc(100% - 2 * var(--gutter));
+  min-width: 280px;
+  width: auto;
+  text-align: center;
+}
+
+@media (max-width: 480px) {
+  .snackbar,
+  .toast {
+    min-width: 0;
+    left: var(--gutter);
+    right: var(--gutter);
+    transform: none;
+    width: auto;
+  }
 }
 
 .toast {
