@@ -14,7 +14,7 @@ import {
   IconPlay,
   IconUndo,
   IconClose,
-  IconCog,
+  IconTimer,
   IconRepeat,
 } from './Icons';
 
@@ -265,9 +265,22 @@ export function StudyTimer({ timer, examId, onExamChange }: Props) {
             aria-label="Podešavanja Pomodoro"
             disabled={pomodoroEnabled && timer.running}
           >
-            <IconCog size={18} />
+            <IconTimer size={18} />
           </button>
         </div>
+        {pomodoroEnabled && (
+          <div className="timer__pomodoro-summary">
+            <span className="timer__pomodoro-item">
+              <span className="timer__pomodoro-label">Učenje</span>
+              <span className="timer__pomodoro-value">{pomodoroSettings.studyMinutes} min</span>
+            </span>
+            <span className="timer__pomodoro-separator">/</span>
+            <span className="timer__pomodoro-item">
+              <span className="timer__pomodoro-label">Odmor</span>
+              <span className="timer__pomodoro-value">{pomodoroSettings.restMinutes} min</span>
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="timer__dial-wrap">

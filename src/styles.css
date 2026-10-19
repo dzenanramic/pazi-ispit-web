@@ -2024,6 +2024,39 @@ ol {
   color: #fff8f3;
 }
 
+.timer__pomodoro-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 6px 12px;
+  background: var(--card-sunk);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  font-size: 12px;
+}
+
+.timer__pomodoro-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.timer__pomodoro-label {
+  font-weight: 500;
+  color: var(--ink-3);
+}
+
+.timer__pomodoro-value {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.timer__pomodoro-separator {
+  color: var(--ink-3);
+}
+
 .timer__phase-info {
   display: flex;
   flex-direction: column;
@@ -2261,6 +2294,19 @@ ol {
   .timer__cycles {
     background: #1e2b22;
     color: #8fbf9b;
+  }
+  .timer__pomodoro-summary {
+    background: var(--paper-2);
+    border-color: var(--line);
+  }
+  .timer__pomodoro-label {
+    color: var(--ink-3);
+  }
+  .timer__pomodoro-value {
+    color: var(--ink);
+  }
+  .timer__pomodoro-separator {
+    color: var(--ink-3);
   }
 }
 
