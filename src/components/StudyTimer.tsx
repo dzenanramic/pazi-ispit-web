@@ -148,20 +148,21 @@ export function StudyTimer({ timer, examId, onExamChange }: Props) {
       playNotificationSound(currentPhase);
     }
 
+    // Reset timer for the new phase
+    timer.reset();
+
     if (currentPhase === 'study') {
       setCompletedCycles(c => c + 1);
       setCurrentPhase('rest');
       setPhaseEndTime(Date.now() + restDuration * 1000);
       if (pomodoroSettings.autoStartBreaks) {
-      } else {
-        timer.pause();
+        timer.start();
       }
     } else {
       setCurrentPhase('study');
       setPhaseEndTime(Date.now() + studyDuration * 1000);
       if (pomodoroSettings.autoStartStudies) {
-      } else {
-        timer.pause();
+        timer.start();
       }
     }
   }, [pomodoroEnabled, pomodoroSettings, currentPhase, studyDuration, restDuration, timer]);
