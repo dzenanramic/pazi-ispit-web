@@ -310,7 +310,9 @@ export function StudyTimer({ timer, examId, onExamChange }: Props) {
           <span className="timer__clock" aria-live="off">
             {pomodoroEnabled && phaseEndTime
               ? formatClock(Math.max(0, Math.ceil((phaseEndTime - Date.now()) / 1000)))
-              : formatClock(timer.elapsed)}
+              : pomodoroEnabled && !timer.running && !phaseEndTime
+                ? formatClock(currentPhaseDuration)
+                : formatClock(timer.elapsed)}
           </span>
           <div className="timer__phase-info">
             <span className="timer__phase-label" style={{ color: phaseColor }}>
