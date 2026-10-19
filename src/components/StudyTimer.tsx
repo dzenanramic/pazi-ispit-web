@@ -387,7 +387,19 @@ export function StudyTimer({ timer, examId, onExamChange }: Props) {
                   min="1"
                   max="120"
                   value={pomodoroSettings.studyMinutes}
-                  onChange={e => handleSettingsChange('studyMinutes', Math.max(1, Math.min(120, parseInt(e.target.value) || 1)))}
+                  onChange={e => {
+                    const val = e.target.value;
+                    if (val === '' || val === '-') return;
+                    const num = parseInt(val, 10);
+                    if (!isNaN(num)) handleSettingsChange('studyMinutes', Math.max(1, Math.min(120, num)));
+                  }}
+                  onBlur={e => {
+                    const val = e.target.value;
+                    if (val === '' || val === '-') {
+                      handleSettingsChange('studyMinutes', 1);
+                      e.target.value = '1';
+                    }
+                  }}
                 />
               </div>
               <div className="field">
@@ -398,37 +410,49 @@ export function StudyTimer({ timer, examId, onExamChange }: Props) {
                   min="1"
                   max="60"
                   value={pomodoroSettings.restMinutes}
-                  onChange={e => handleSettingsChange('restMinutes', Math.max(1, Math.min(60, parseInt(e.target.value) || 1)))}
+                  onChange={e => {
+                    const val = e.target.value;
+                    if (val === '' || val === '-') return;
+                    const num = parseInt(val, 10);
+                    if (!isNaN(num)) handleSettingsChange('restMinutes', Math.max(1, Math.min(60, num)));
+                  }}
+                  onBlur={e => {
+                    const val = e.target.value;
+                    if (val === '' || val === '-') {
+                      handleSettingsChange('restMinutes', 1);
+                      e.target.value = '1';
+                    }
+                  }}
                 />
               </div>
               <div className="field">
-                <label className="field__label">
+                <label className="field__label field__label--checkbox">
                   <input
                     type="checkbox"
                     checked={pomodoroSettings.soundEnabled}
                     onChange={e => handleSettingsChange('soundEnabled', e.target.checked)}
                   />
-                  Zvuk na kraju perioda
+                  <span>Zvuk na kraju perioda</span>
                 </label>
               </div>
               <div className="field">
-                <label className="field__label">
+                <label className="field__label field__label--checkbox">
                   <input
                     type="checkbox"
                     checked={pomodoroSettings.autoStartBreaks}
                     onChange={e => handleSettingsChange('autoStartBreaks', e.target.checked)}
                   />
-                  Automatski pokreni odmora
+                  <span>Automatski pokreni odmora</span>
                 </label>
               </div>
               <div className="field">
-                <label className="field__label">
+                <label className="field__label field__label--checkbox">
                   <input
                     type="checkbox"
                     checked={pomodoroSettings.autoStartStudies}
                     onChange={e => handleSettingsChange('autoStartStudies', e.target.checked)}
                   />
-                  Automatski pokreni učenje
+                  <span>Automatski pokreni učenje</span>
                 </label>
               </div>
               <div className="sheet__actions">
