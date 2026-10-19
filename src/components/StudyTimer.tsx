@@ -1,14 +1,22 @@
 /**
  * Ekran za učenje. Isti duh kao Android "Timers", ali sa dvije stvari koje
  * web verzija mora imati: biraš za koji ispit učiš i sesija se pamti.
- * Sada uključuje i Pomodoro timer sa učenjem/odmorom ciklusima.
+ * Pomodoro stanje živi u `App`-u (vidi `useStudyTimer`), pa ovaj ekran samo
+ * prikazuje stanje i šalje akcije.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { dayKey, formatClock, formatDuration, formatShort, todayISO } from '../lib/date';
-import { addSession, useStore } from '../lib/store';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  dayKey,
+  formatClock,
+  formatDuration,
+  formatShort,
+  fromISODate,
+} from '../lib/date';
+import { useStore } from '../lib/store';
 import { sortExams } from '../lib/storage';
 import type { StudyTimerState } from '../lib/useStudyTimer';
-import { useTodayKey } from '../lib/useTodayKey';
+import { useToday } from '../lib/useTodayKey';
+import { useDialogFocus } from '../lib/useDialogFocus';
 import {
   IconPause,
   IconPlay,
@@ -24,71 +32,13 @@ type Props = {
   onExamChange: (examId: string | null) => void;
 };
 
-type Phase = 'study' | 'rest';
-
-interface PomodoroSettings {
-  studyMinutes: number;
-  restMinutes: number;
-  soundEnabled: boolean;
-  autoStartBreaks: boolean;
-  autoStartStudies: boolean;
-}
-
-const DEFAULT_POMODORO: PomodoroSettings = {
-  studyMinutes: 30,
-  restMinutes: 10,
-  soundEnabled: true,
-  autoStartBreaks: false,
-  autoStartStudies: false,
-};
-
-const STORAGE_KEY = 'pazi-pomodoro-settings';
-
-function loadSettings(): PomodoroSettings {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      return { ...DEFAULT_POMODORO, ...JSON.parse(stored) };
-    }
-  } catch {
-    // ignore parse errors
-  }
-  return DEFAULT_POMODORO;
-}
-
-function saveSettings(settings: PomodoroSettings) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-  } catch {
-    // ignore quota errors
-  }
-}
-
-function playNotificationSound(type: 'study' | 'rest') {
-  const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-  const ctx = new AudioContextClass();
-  const oscillator = ctx.createOscillator();
-  const gainNode = ctx.createGain();
-
-  oscillator.connect(gainNode);
-  gainNode.connect(ctx.destination);
-
-  if (type === 'study') {
-    oscillator.frequency.setValueAtTime(880, ctx.currentTime);
-    oscillator.frequency.setValueAtTime(1108, ctx.currentTime + 0.1);
-    oscillator.frequency.setValueAtTime(1318, ctx.currentTime + 0.2);
-    gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.8);
-    oscillator.start(ctx.currentTime);
-    oscillator.stop(ctx.currentTime + 0.8);
-  } else {
-    oscillator.frequency.setValueAtTime(440, ctx.currentTime);
-    oscillator.frequency.setValueAtTime(554, ctx.currentTime + 0.15);
-    gainNode.gain.setValueAtTime(0.25, ctx.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 1);
-    oscillator.start(ctx.currentTime);
-    oscillator.stop(ctx.currentTime + 1);
-  }
+/** Broj iz polja za unos; prazno polje se vraća na minimum, smeće na staru vrijednost. */
+function clampInput(raw: string, min: number, max: number, fallback: number): number {
+  const value = raw.trim();
+  if (value === '' || value === '-') return min;
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
 }
 
 export function StudyTimer({ timer, examId, onExamChange }: Props) {
@@ -96,161 +46,95 @@ export function StudyTimer({ timer, examId, onExamChange }: Props) {
   const [savedToast, setSavedToast] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showPomodoroSettings, setShowPomodoroSettings] = useState(false);
-  const [pomodoroSettings, setPomodoroSettings] = useState<PomodoroSettings>(() => loadSettings());
-  const [pomodoroEnabled, setPomodoroEnabled] = useState(false);
-  const [currentPhase, setCurrentPhase] = useState<Phase>('study');
-  const [phaseEndTime, setPhaseEndTime] = useState<number | null>(null);
-  const [completedCycles, setCompletedCycles] = useState(0);
-  const [studyInputValue, setStudyInputValue] = useState(() => String(loadSettings().studyMinutes));
-  const [restInputValue, setRestInputValue] = useState(() => String(loadSettings().restMinutes));
+  const [studyInputValue, setStudyInputValue] = useState(() => String(timer.settings.studyMinutes));
+  const [restInputValue, setRestInputValue] = useState(() => String(timer.settings.restMinutes));
 
-  const upcoming = useMemo(() => sortExams(exams).filter(e => e.date >= todayISO()), [exams]);
+  const { key: today, iso: todayIso } = useToday();
+  const upcoming = useMemo(
+    () => sortExams(exams, fromISODate(todayIso)).filter(e => e.date >= todayIso),
+    [exams, todayIso],
+  );
   const selected = upcoming.find(e => e.id === examId) ?? null;
 
-  const today = useTodayKey();
-  const todaySeconds = useMemo(() => {
-    return sessions
-      .filter(s => dayKey(s.endedAt) === today)
-      .reduce((sum, s) => sum + s.seconds, 0);
-  }, [sessions, today]);
+  const todaySeconds = useMemo(
+    () => sessions.filter(s => dayKey(s.endedAt) === today).reduce((sum, s) => sum + s.seconds, 0),
+    [sessions, today],
+  );
 
   const examTotal = selected
     ? sessions.filter(s => s.examId === selected.id).reduce((sum, s) => sum + s.seconds, 0)
     : 0;
 
   const progress = (timer.elapsed % 3600) / 3600;
+  const phaseLabel = timer.phase === 'study' ? 'Učenje' : 'Odmor';
+  const phaseColor = timer.phase === 'study' ? 'var(--time)' : 'var(--ok)';
+  const nextPhaseLabel =
+    timer.phase === 'study'
+      ? `Odmor ${timer.settings.restMinutes} min`
+      : `Učenje ${timer.settings.studyMinutes} min`;
+  const resetPossible = timer.elapsed > 0 || (timer.pomodoroEnabled && timer.running);
 
-  const studyDuration = pomodoroSettings.studyMinutes * 60;
-  const restDuration = pomodoroSettings.restMinutes * 60;
-  const currentPhaseDuration = currentPhase === 'study' ? studyDuration : restDuration;
-  const phaseProgress = currentPhaseDuration > 0 ? timer.elapsed / currentPhaseDuration : 0;
+  const resetDialogRef = useRef<HTMLDivElement>(null);
+  const resetCancelRef = useRef<HTMLButtonElement>(null);
+  const settingsDialogRef = useRef<HTMLDivElement>(null);
+  const settingsCloseRef = useRef<HTMLButtonElement>(null);
+  const toastTimer = useRef<number | null>(null);
 
-  const isPhaseComplete = timer.elapsed >= currentPhaseDuration && timer.running && pomodoroEnabled;
+  useDialogFocus({
+    active: showResetConfirm,
+    containerRef: resetDialogRef,
+    onClose: () => setShowResetConfirm(false),
+    initialFocusRef: resetCancelRef,
+  });
+  useDialogFocus({
+    active: showPomodoroSettings,
+    containerRef: settingsDialogRef,
+    onClose: () => setShowPomodoroSettings(false),
+    initialFocusRef: settingsCloseRef,
+  });
+
+  // Isti obrazac kao glavni dijalozi u App-u: pozadina ne skroluje.
+  useEffect(() => {
+    if (!showResetConfirm && !showPomodoroSettings) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [showResetConfirm, showPomodoroSettings]);
+
+  useEffect(
+    () => () => {
+      if (toastTimer.current !== null) window.clearTimeout(toastTimer.current);
+    },
+    [],
+  );
 
   function save() {
-    const seconds = timer.take();
-    if (seconds < 1) return;
-    const now = Date.now();
-    addSession({
-      examId: selected?.id ?? null,
-      startedAt: now - seconds * 1000,
-      endedAt: now,
-      seconds,
-    });
+    if (!timer.canSave) return;
+    timer.save();
     setSavedToast(true);
-    window.setTimeout(() => setSavedToast(false), 2600);
+    if (toastTimer.current !== null) window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setSavedToast(false), 2600);
   }
 
-  const handlePhaseComplete = useCallback(() => {
-    if (!pomodoroEnabled || !timer.running) return;
+  function openSettings() {
+    setStudyInputValue(String(timer.settings.studyMinutes));
+    setRestInputValue(String(timer.settings.restMinutes));
+    setShowPomodoroSettings(true);
+  }
 
-    if (pomodoroSettings.soundEnabled) {
-      playNotificationSound(currentPhase);
-    }
+  function commitStudyInput() {
+    const minutes = clampInput(studyInputValue, 1, 120, timer.settings.studyMinutes);
+    setStudyInputValue(String(minutes));
+    timer.updateSettings({ studyMinutes: minutes });
+  }
 
-    // Reset timer for the new phase
-    timer.reset();
-
-    if (currentPhase === 'study') {
-      setCompletedCycles(c => c + 1);
-      setCurrentPhase('rest');
-      // Don't set phaseEndTime yet - wait until timer actually starts
-      if (pomodoroSettings.autoStartBreaks) {
-        timer.start();
-        setPhaseEndTime(Date.now() + restDuration * 1000);
-      } else {
-        setPhaseEndTime(null);
-      }
-    } else {
-      setCurrentPhase('study');
-      if (pomodoroSettings.autoStartStudies) {
-        timer.start();
-        setPhaseEndTime(Date.now() + studyDuration * 1000);
-      } else {
-        setPhaseEndTime(null);
-      }
-    }
-  }, [pomodoroEnabled, pomodoroSettings, currentPhase, studyDuration, restDuration, timer]);
-
-  useEffect(() => {
-    if (isPhaseComplete) {
-      handlePhaseComplete();
-    }
-  }, [isPhaseComplete, handlePhaseComplete]);
-
-  const handlePomodoroToggle = useCallback(() => {
-    if (pomodoroEnabled) {
-      setPomodoroEnabled(false);
-      setCurrentPhase('study');
-      setPhaseEndTime(null);
-      timer.reset();
-    } else {
-      setPomodoroEnabled(true);
-      setCurrentPhase('study');
-      setCompletedCycles(0);
-      setPhaseEndTime(timer.running ? Date.now() + studyDuration * 1000 : null);
-    }
-  }, [pomodoroEnabled, studyDuration, timer]);
-
-  const handleSettingsChange = useCallback((key: keyof PomodoroSettings, value: number | boolean) => {
-    const newSettings = { ...pomodoroSettings, [key]: value };
-    setPomodoroSettings(newSettings);
-    saveSettings(newSettings);
-  }, [pomodoroSettings]);
-
-  const handleStudyBlur = useCallback(() => {
-    const val = studyInputValue.trim();
-    if (val === '' || val === '-') {
-      setStudyInputValue('1');
-      handleSettingsChange('studyMinutes', 1);
-    } else {
-      const num = parseInt(val, 10);
-      if (!isNaN(num)) {
-        const clamped = Math.max(1, Math.min(120, num));
-        setStudyInputValue(String(clamped));
-        handleSettingsChange('studyMinutes', clamped);
-      }
-    }
-  }, [studyInputValue, handleSettingsChange]);
-
-  const handleRestBlur = useCallback(() => {
-    const val = restInputValue.trim();
-    if (val === '' || val === '-') {
-      setRestInputValue('1');
-      handleSettingsChange('restMinutes', 1);
-    } else {
-      const num = parseInt(val, 10);
-      if (!isNaN(num)) {
-        const clamped = Math.max(1, Math.min(60, num));
-        setRestInputValue(String(clamped));
-        handleSettingsChange('restMinutes', clamped);
-      }
-    }
-  }, [restInputValue, handleSettingsChange]);
-
-  const handleTimerStart = useCallback(() => {
-    timer.start();
-    if (pomodoroEnabled && !phaseEndTime) {
-      const duration = currentPhase === 'study' ? studyDuration : restDuration;
-      setPhaseEndTime(Date.now() + duration * 1000);
-    }
-  }, [timer, pomodoroEnabled, phaseEndTime, currentPhase, studyDuration, restDuration]);
-
-  const handleTimerPause = useCallback(() => {
-    timer.pause();
-  }, [timer]);
-
-  const handleTimerToggle = useCallback(() => {
-    if (timer.running) {
-      handleTimerPause();
-    } else {
-      handleTimerStart();
-    }
-  }, [timer.running, handleTimerPause, handleTimerStart]);
-
-  const phaseLabel = currentPhase === 'study' ? 'Učenje' : 'Odmor';
-  const phaseColor = currentPhase === 'study' ? 'var(--time)' : 'var(--ok)';
-  const nextPhaseLabel = currentPhase === 'study' ? `Odmor ${pomodoroSettings.restMinutes} min` : `Učenje ${pomodoroSettings.studyMinutes} min`;
+  function commitRestInput() {
+    const minutes = clampInput(restInputValue, 1, 60, timer.settings.restMinutes);
+    setRestInputValue(String(minutes));
+    timer.updateSettings({ restMinutes: minutes });
+  }
 
   return (
     <div className="timer">
@@ -259,9 +143,9 @@ export function StudyTimer({ timer, examId, onExamChange }: Props) {
           <div className="timer__mode-row">
             <button
               type="button"
-              className={`timer__mode-btn ${pomodoroEnabled ? 'is-active' : ''}`}
-              onClick={handlePomodoroToggle}
-              aria-pressed={pomodoroEnabled}
+              className={`timer__mode-btn ${timer.pomodoroEnabled ? 'is-active' : ''}`}
+              onClick={timer.togglePomodoro}
+              aria-pressed={timer.pomodoroEnabled}
             >
               <IconRepeat size={18} />
               <span>Pomodoro</span>
@@ -269,24 +153,29 @@ export function StudyTimer({ timer, examId, onExamChange }: Props) {
             <button
               type="button"
               className="iconbtn iconbtn--sm"
-              onClick={() => setShowPomodoroSettings(true)}
+              onClick={openSettings}
               aria-label="Podešavanja Pomodoro"
-              disabled={pomodoroEnabled && timer.running}
+              disabled={!timer.canEditSettings}
+              title={
+                timer.canEditSettings
+                  ? 'Podešavanja Pomodoro'
+                  : 'Pauziraj i poništi fazu da promijeniš podešavanja'
+              }
             >
               <IconTimer size={18} />
             </button>
           </div>
         </div>
-        {pomodoroEnabled && (
+        {timer.pomodoroEnabled && (
           <div className="timer__pomodoro-summary">
             <span className="timer__pomodoro-item">
               <span className="timer__pomodoro-label">Učenje</span>
-              <span className="timer__pomodoro-value">{pomodoroSettings.studyMinutes} min</span>
+              <span className="timer__pomodoro-value">{timer.settings.studyMinutes} min</span>
             </span>
             <span className="timer__pomodoro-separator">/</span>
             <span className="timer__pomodoro-item">
               <span className="timer__pomodoro-label">Odmor</span>
-              <span className="timer__pomodoro-value">{pomodoroSettings.restMinutes} min</span>
+              <span className="timer__pomodoro-value">{timer.settings.restMinutes} min</span>
             </span>
           </div>
         )}
@@ -301,34 +190,43 @@ export function StudyTimer({ timer, examId, onExamChange }: Props) {
             cy="120"
             r="104"
             style={{
-              strokeDashoffset: 653.45 * (1 - (pomodoroEnabled ? Math.min(phaseProgress, 1) : progress)),
-              stroke: pomodoroEnabled ? (currentPhase === 'study' ? 'var(--time)' : 'var(--ok)') : 'var(--time)',
+              strokeDashoffset:
+                653.45 * (1 - (timer.pomodoroEnabled ? timer.phaseProgress : progress)),
+              stroke: timer.pomodoroEnabled
+                ? timer.phase === 'study'
+                  ? 'var(--time)'
+                  : 'var(--ok)'
+                : 'var(--time)',
             }}
           />
         </svg>
         <div className="timer__readout">
           <span className="timer__clock" aria-live="off">
-            {pomodoroEnabled && phaseEndTime
-              ? formatClock(Math.max(0, Math.ceil((phaseEndTime - Date.now()) / 1000)))
-              : pomodoroEnabled && !timer.running && !phaseEndTime
-                ? formatClock(currentPhaseDuration)
-                : formatClock(timer.elapsed)}
+            {timer.pomodoroEnabled
+              ? formatClock(timer.phaseRemaining)
+              : formatClock(timer.elapsed)}
           </span>
           <div className="timer__phase-info">
             <span className="timer__phase-label" style={{ color: phaseColor }}>
-              {pomodoroEnabled ? phaseLabel : (timer.running ? 'učenje u toku' : timer.elapsed > 0 ? 'pauza' : 'spremno')}
+              {timer.pomodoroEnabled
+                ? phaseLabel
+                : timer.running
+                  ? 'učenje u toku'
+                  : timer.elapsed > 0
+                    ? 'pauza'
+                    : 'spremno'}
             </span>
-            {pomodoroEnabled && timer.running && (
+            {timer.pomodoroEnabled && timer.running && (
               <span className="timer__next-phase">Sljedeće: {nextPhaseLabel}</span>
             )}
           </div>
         </div>
       </div>
 
-      {pomodoroEnabled && completedCycles > 0 && (
+      {timer.pomodoroEnabled && timer.cycles > 0 && (
         <div className="timer__cycles" aria-live="polite">
           <IconRepeat size={14} />
-          <span>Završenih ciklusa: {completedCycles}</span>
+          <span>Završenih ciklusa: {timer.cycles}</span>
         </div>
       )}
 
@@ -354,7 +252,9 @@ export function StudyTimer({ timer, examId, onExamChange }: Props) {
             </div>
           </>
         ) : (
-          <p className="timer__exam-empty">Dodaj ispit na početnom ekranu pa ovdje možeš birati za šta učiš.</p>
+          <p className="timer__exam-empty">
+            Dodaj ispit na početnom ekranu pa ovdje možeš birati za šta učiš.
+          </p>
         )}
       </div>
 
@@ -362,8 +262,8 @@ export function StudyTimer({ timer, examId, onExamChange }: Props) {
         <button
           type="button"
           className="timer__reset"
-          onClick={() => timer.elapsed > 0 && setShowResetConfirm(true)}
-          disabled={timer.elapsed === 0}
+          onClick={() => setShowResetConfirm(true)}
+          disabled={!resetPossible}
         >
           <IconUndo size={17} />
           Reset
@@ -371,12 +271,22 @@ export function StudyTimer({ timer, examId, onExamChange }: Props) {
         <button
           type="button"
           className={`timer__toggle ${timer.running ? 'is-running' : ''}`}
-          onClick={handleTimerToggle}
+          onClick={timer.toggle}
           aria-label={timer.running ? 'Pauza' : 'Započni učenje'}
         >
           {timer.running ? <IconPause size={26} /> : <IconPlay size={26} />}
         </button>
-        <button type="button" className="timer__save" onClick={save} disabled={timer.elapsed < 1}>
+        <button
+          type="button"
+          className="timer__save"
+          onClick={save}
+          disabled={!timer.canSave}
+          title={
+            timer.pomodoroEnabled && timer.phase === 'rest'
+              ? 'Odmor se ne upisuje kao učenje'
+              : undefined
+          }
+        >
           Sačuvaj
         </button>
       </div>
@@ -399,7 +309,7 @@ export function StudyTimer({ timer, examId, onExamChange }: Props) {
       )}
 
       {showResetConfirm && (
-        <div className="sheet-layer" role="alertdialog" aria-modal="true" aria-labelledby="reset-confirm-title">
+        <div className="sheet-layer">
           <button
             type="button"
             className="sheet-backdrop"
@@ -407,19 +317,49 @@ export function StudyTimer({ timer, examId, onExamChange }: Props) {
             aria-label="Zatvori"
             tabIndex={-1}
           />
-          <div className="sheet sheet--confirm" role="document" tabIndex={-1}>
-            <h2 id="reset-confirm-title" className="sheet__title">Ponistiti učenje?</h2>
-            <p className="sheet__text">Vrijeme od {formatClock(timer.elapsed)} će se izgubiti. Ovo se ne može poništiti.</p>
+          <div
+            className="sheet sheet--confirm"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="reset-confirm-title"
+            ref={resetDialogRef}
+            tabIndex={-1}
+          >
+            <h2 id="reset-confirm-title" className="sheet__title">
+              Poništiti učenje?
+            </h2>
+            <p className="sheet__text">
+              {timer.elapsed > 0
+                ? `Vrijeme od ${formatClock(timer.elapsed)} će se izgubiti.`
+                : 'Trenutna faza će se poništiti.'}{' '}
+              Ovo se ne može poništiti.
+            </p>
             <div className="sheet__actions">
-              <button type="button" className="btn btn--ghost" onClick={() => setShowResetConfirm(false)}>Odustani</button>
-              <button type="button" className="btn btn--danger" onClick={() => { timer.reset(); setShowResetConfirm(false); }}>Ponisti</button>
+              <button
+                type="button"
+                className="btn btn--ghost"
+                ref={resetCancelRef}
+                onClick={() => setShowResetConfirm(false)}
+              >
+                Odustani
+              </button>
+              <button
+                type="button"
+                className="btn btn--danger"
+                onClick={() => {
+                  timer.reset();
+                  setShowResetConfirm(false);
+                }}
+              >
+                Poništi
+              </button>
             </div>
           </div>
         </div>
       )}
 
       {showPomodoroSettings && (
-        <div className="sheet-layer" role="dialog" aria-modal="true" aria-labelledby="pomodoro-settings-title">
+        <div className="sheet-layer">
           <button
             type="button"
             className="sheet-backdrop"
@@ -427,44 +367,67 @@ export function StudyTimer({ timer, examId, onExamChange }: Props) {
             aria-label="Zatvori"
             tabIndex={-1}
           />
-          <div className="sheet" role="document" tabIndex={-1}>
+          <div
+            className="sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pomodoro-settings-title"
+            ref={settingsDialogRef}
+            tabIndex={-1}
+          >
             <header className="sheet__head">
-              <h2 id="pomodoro-settings-title" className="sheet__title">Podešavanja Pomodoro</h2>
-              <button type="button" className="iconbtn" onClick={() => setShowPomodoroSettings(false)} aria-label="Zatvori">
+              <h2 id="pomodoro-settings-title" className="sheet__title">
+                Podešavanja Pomodoro
+              </h2>
+              <button
+                type="button"
+                className="iconbtn"
+                ref={settingsCloseRef}
+                onClick={() => setShowPomodoroSettings(false)}
+                aria-label="Zatvori"
+              >
                 <IconClose size={18} />
               </button>
             </header>
             <div className="sheet__form">
               <div className="field">
-                <label className="field__label">Trajanje učenja (minute)</label>
+                <label className="field__label" htmlFor="pomodoro-study-minutes">
+                  Trajanje učenja (minute)
+                </label>
                 <input
+                  id="pomodoro-study-minutes"
                   type="number"
                   className="input"
                   min="1"
                   max="120"
+                  inputMode="numeric"
                   value={studyInputValue}
                   onChange={e => setStudyInputValue(e.target.value)}
-                  onBlur={handleStudyBlur}
+                  onBlur={commitStudyInput}
                 />
               </div>
               <div className="field">
-                <label className="field__label">Trajanje odmora (minute)</label>
+                <label className="field__label" htmlFor="pomodoro-rest-minutes">
+                  Trajanje odmora (minute)
+                </label>
                 <input
+                  id="pomodoro-rest-minutes"
                   type="number"
                   className="input"
                   min="1"
                   max="60"
+                  inputMode="numeric"
                   value={restInputValue}
                   onChange={e => setRestInputValue(e.target.value)}
-                  onBlur={handleRestBlur}
+                  onBlur={commitRestInput}
                 />
               </div>
               <div className="field">
                 <label className="field__label field__label--checkbox">
                   <input
                     type="checkbox"
-                    checked={pomodoroSettings.soundEnabled}
-                    onChange={e => handleSettingsChange('soundEnabled', e.target.checked)}
+                    checked={timer.settings.soundEnabled}
+                    onChange={e => timer.updateSettings({ soundEnabled: e.target.checked })}
                   />
                   <span>Zvuk na kraju perioda</span>
                 </label>
@@ -473,24 +436,28 @@ export function StudyTimer({ timer, examId, onExamChange }: Props) {
                 <label className="field__label field__label--checkbox">
                   <input
                     type="checkbox"
-                    checked={pomodoroSettings.autoStartBreaks}
-                    onChange={e => handleSettingsChange('autoStartBreaks', e.target.checked)}
+                    checked={timer.settings.autoStartBreaks}
+                    onChange={e => timer.updateSettings({ autoStartBreaks: e.target.checked })}
                   />
-                  <span>Automatski pokreni odmora</span>
+                  <span>Automatski pokreni odmor</span>
                 </label>
               </div>
               <div className="field">
                 <label className="field__label field__label--checkbox">
                   <input
                     type="checkbox"
-                    checked={pomodoroSettings.autoStartStudies}
-                    onChange={e => handleSettingsChange('autoStartStudies', e.target.checked)}
+                    checked={timer.settings.autoStartStudies}
+                    onChange={e => timer.updateSettings({ autoStartStudies: e.target.checked })}
                   />
                   <span>Automatski pokreni učenje</span>
                 </label>
               </div>
               <div className="sheet__actions">
-                <button type="button" className="btn btn--primary" onClick={() => setShowPomodoroSettings(false)}>
+                <button
+                  type="button"
+                  className="btn btn--primary"
+                  onClick={() => setShowPomodoroSettings(false)}
+                >
                   Gotovo
                 </button>
               </div>

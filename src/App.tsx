@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   PERSIST_FAILED_EVENT,
   addExam,
+  addSession,
   clearAll,
   deleteExam,
   restoreExam,
@@ -16,7 +17,7 @@ import { ExamSheet } from './components/ExamSheet';
 import { StudyTimer } from './components/StudyTimer';
 import { AppMark, IconPlus, IconTimer } from './components/Icons';
 import { useTodayKey } from './lib/useTodayKey';
-import { useStudyTimer } from './lib/useStudyTimer';
+import { useStudyTimer, type StudySessionInput } from './lib/useStudyTimer';
 import { useDialogFocus } from './lib/useDialogFocus';
 
 type View = 'home' | 'timer';
@@ -34,11 +35,20 @@ export default function App() {
   const [confirmClear, setConfirmClear] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
 
-  // Štoperica živi u App-u, ne u ekranu za učenje: prelazak na listu i nazad
-  // ne smije izgubiti započeto vrijeme. Interval se vrti samo dok je timer
-  // otvoren; proteklo vrijeme se ionako računa iz vremenske oznake.
-  const timer = useStudyTimer(view === 'timer');
+  // Štoperica i Pomodoro žive u App-u, ne u ekranu za učenje: prelazak na
+  // listu i nazad ne smije izgubiti započeto vrijeme ni fazu Pomodora.
   const [timerExamId, setTimerExamId] = useState<string | null>(null);
+  const timerExamIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    timerExamIdRef.current = timerExamId;
+  }, [timerExamId]);
+
+  // Automatski upis sesije (kraj Pomodoro faze) mora znati za koji je ispit
+  // učenje teklo u trenutku završetka, pa ide kroz ref.
+  const handleSession = useCallback((session: StudySessionInput) => {
+    addSession({ ...session, examId: timerExamIdRef.current });
+  }, []);
+  const timer = useStudyTimer({ onSession: handleSession });
   const clearDialogRef = useRef<HTMLDivElement>(null);
   const clearCancelRef = useRef<HTMLButtonElement>(null);
 
@@ -89,15 +99,21 @@ export default function App() {
     document.title = view === 'timer' ? 'Učenje — Pazi! Ispit' : 'Pazi! Ispit';
   }, [view]);
 
+  /** Biramo ispit i odmah ažuriramo ref (za upis sesije iz intervala). */
+  function selectExam(examId: string | null) {
+    timerExamIdRef.current = examId;
+    setTimerExamId(examId);
+  }
+
   /** Otvara timer za konkretan ispit (klik na "Uči" ili karticu "Sljedeće"). */
   function openTimerFor(examId: string) {
-    setTimerExamId(examId);
+    selectExam(examId);
     setView('timer');
   }
 
   /** Otvara timer bez mijenjanja već izabranog ispita (donji "dock"). */
   function openTimer() {
-    if (!timerExamId) setTimerExamId(next?.id ?? null);
+    if (!timerExamId) selectExam(next?.id ?? null);
     setView('timer');
   }
 
@@ -135,7 +151,7 @@ export default function App() {
   function handleDelete(exam: Exam) {
     const deletedSessions = sessions.filter(s => s.examId === exam.id);
     deleteExam(exam.id);
-    if (timerExamId === exam.id) setTimerExamId(null);
+    if (timerExamId === exam.id) selectExam(null);
     setSheet(null);
     if (undo) window.clearTimeout(undo.timer);
     const undoTimer = window.setTimeout(() => setUndo(null), 6000);
@@ -154,8 +170,8 @@ export default function App() {
     // ispit mogao vratiti odmah nakon brisanja svih podataka.
     if (undo) window.clearTimeout(undo.timer);
     setUndo(null);
-    setTimerExamId(null);
-    timer.reset();
+    selectExam(null);
+    timer.resetAll();
     clearAll();
     setConfirmClear(false);
   }
@@ -288,7 +304,7 @@ export default function App() {
             </button>
             <h2 className="subhead__title">Učenje</h2>
           </header>
-          <StudyTimer timer={timer} examId={timerExamId} onExamChange={setTimerExamId} />
+          <StudyTimer timer={timer} examId={timerExamId} onExamChange={selectExam} />
         </main>
       )}
 
