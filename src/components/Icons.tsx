@@ -125,3 +125,41 @@ export function AppMark({ size = 32 }: { size?: number }) {
     </svg>
   );
 }
+
+export function IconCog({ size = 20, strokeWidth = 1.75, ...rest }: Props) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} strokeWidth={strokeWidth} {...base} {...rest}>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+    </svg>
+  );
+}
+
+export function IconVolume({ size = 20, strokeWidth = 1.75, ...rest }: Props) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} strokeWidth={strokeWidth} {...base} {...rest}>
+      <path d="M11 5L6 9H2v6h4l5 4V5Z" />
+      <path d="M15.5 5a5 5 0 0 1 0 10" />
+      <path d="M19.1 9.1a9 9 0 0 1 0 11.8" />
+    </svg>
+  );
+}
+
+export function IconVolumeOff({ size = 20, strokeWidth = 1.75, ...rest }: Props) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} strokeWidth={strokeWidth} {...base} {...rest}>
+      <path d="M11 5L6 9H2v6h4l5 4V5Z" />
+      <line x1="15" y1="5" x2="21" y2="11" />
+      <line x1="21" y1="5" x2="15" y2="11" />
+    </svg>
+  );
+}
+
+export function IconRepeat({ size = 20, strokeWidth = 1.75, ...rest }: Props) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} strokeWidth={strokeWidth} {...base} {...rest}>
+      <path d="M4 4v6h6M20 20v-6h-6" />
+      <path d="M4 20l16-16" />
+    </svg>
+  );
+}
