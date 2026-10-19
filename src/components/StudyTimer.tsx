@@ -101,6 +101,8 @@ export function StudyTimer({ timer, examId, onExamChange }: Props) {
   const [currentPhase, setCurrentPhase] = useState<Phase>('study');
   const [phaseEndTime, setPhaseEndTime] = useState<number | null>(null);
   const [completedCycles, setCompletedCycles] = useState(0);
+  const [studyInputValue, setStudyInputValue] = useState(() => String(loadSettings().studyMinutes));
+  const [restInputValue, setRestInputValue] = useState(() => String(loadSettings().restMinutes));
 
   const upcoming = useMemo(() => sortExams(exams).filter(e => e.date >= todayISO()), [exams]);
   const selected = upcoming.find(e => e.id === examId) ?? null;
@@ -189,6 +191,36 @@ export function StudyTimer({ timer, examId, onExamChange }: Props) {
     setPomodoroSettings(newSettings);
     saveSettings(newSettings);
   }, [pomodoroSettings]);
+
+  const handleStudyBlur = useCallback(() => {
+    const val = studyInputValue.trim();
+    if (val === '' || val === '-') {
+      setStudyInputValue('1');
+      handleSettingsChange('studyMinutes', 1);
+    } else {
+      const num = parseInt(val, 10);
+      if (!isNaN(num)) {
+        const clamped = Math.max(1, Math.min(120, num));
+        setStudyInputValue(String(clamped));
+        handleSettingsChange('studyMinutes', clamped);
+      }
+    }
+  }, [studyInputValue, handleSettingsChange]);
+
+  const handleRestBlur = useCallback(() => {
+    const val = restInputValue.trim();
+    if (val === '' || val === '-') {
+      setRestInputValue('1');
+      handleSettingsChange('restMinutes', 1);
+    } else {
+      const num = parseInt(val, 10);
+      if (!isNaN(num)) {
+        const clamped = Math.max(1, Math.min(60, num));
+        setRestInputValue(String(clamped));
+        handleSettingsChange('restMinutes', clamped);
+      }
+    }
+  }, [restInputValue, handleSettingsChange]);
 
   const handleTimerStart = useCallback(() => {
     timer.start();
@@ -386,20 +418,9 @@ export function StudyTimer({ timer, examId, onExamChange }: Props) {
                   className="input"
                   min="1"
                   max="120"
-                  value={pomodoroSettings.studyMinutes}
-                  onChange={e => {
-                    const val = e.target.value;
-                    if (val === '' || val === '-') return;
-                    const num = parseInt(val, 10);
-                    if (!isNaN(num)) handleSettingsChange('studyMinutes', Math.max(1, Math.min(120, num)));
-                  }}
-                  onBlur={e => {
-                    const val = e.target.value;
-                    if (val === '' || val === '-') {
-                      handleSettingsChange('studyMinutes', 1);
-                      e.target.value = '1';
-                    }
-                  }}
+                  value={studyInputValue}
+                  onChange={e => setStudyInputValue(e.target.value)}
+                  onBlur={handleStudyBlur}
                 />
               </div>
               <div className="field">
@@ -409,20 +430,9 @@ export function StudyTimer({ timer, examId, onExamChange }: Props) {
                   className="input"
                   min="1"
                   max="60"
-                  value={pomodoroSettings.restMinutes}
-                  onChange={e => {
-                    const val = e.target.value;
-                    if (val === '' || val === '-') return;
-                    const num = parseInt(val, 10);
-                    if (!isNaN(num)) handleSettingsChange('restMinutes', Math.max(1, Math.min(60, num)));
-                  }}
-                  onBlur={e => {
-                    const val = e.target.value;
-                    if (val === '' || val === '-') {
-                      handleSettingsChange('restMinutes', 1);
-                      e.target.value = '1';
-                    }
-                  }}
+                  value={restInputValue}
+                  onChange={e => setRestInputValue(e.target.value)}
+                  onBlur={handleRestBlur}
                 />
               </div>
               <div className="field">
