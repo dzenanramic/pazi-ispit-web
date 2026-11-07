@@ -108,7 +108,13 @@ export function useDialogFocus({ active, containerRef, onClose, initialFocusRef 
       const anotherModal = Array.from(
         document.querySelectorAll<HTMLElement>('[aria-modal="true"]'),
       ).some(el => el !== container && el.isConnected);
-      if (!anotherModal && previouslyFocused?.isConnected) {
+      if (anotherModal || !previouslyFocused?.isConnected) return;
+
+      // Dijalog koji upravo izlazi nije prepreka; samo drugi modal jeste.
+      const anotherOpen = Array.from(
+        document.querySelectorAll<HTMLElement>('[aria-modal="true"]'),
+      ).some(el => el !== container && el.isConnected);
+      if (!anotherOpen && previouslyFocused?.isConnected) {
         previouslyFocused.focus({ preventScroll: true });
       }
     };

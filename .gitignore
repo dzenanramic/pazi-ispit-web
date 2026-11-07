@@ -25,3 +25,6 @@ dist-ssr
 
 # Rezultati QA skripte (slike se generišu pokretanjem qa/verify.py)
 qa/shots
+
+.npm-cache
+qa/redesign/

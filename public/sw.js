@@ -7,7 +7,7 @@
  *
  * Na svaku novu verziju mijenjamo CACHE pa se stari fajlovi uklone.
  */
-const CACHE = 'pazi-ispit-v1';
+const CACHE = 'pazi-ispit-v2';
 const CORE = ['/', '/index.html', '/manifest.webmanifest', '/favicon.svg', '/icons/icon-192.png'];
 
 self.addEventListener('install', event => {

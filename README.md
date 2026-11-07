@@ -57,6 +57,14 @@ Popravljeno u odnosu na original:
   laže kad telefon uspava ekran), može se pauzirati, i sesije se pamte
 - test suite za datume, čuvanje podataka i glavne tokove u UI-u
 
+## Dizajn i pokret
+
+Interfejs je mirna studentska agenda: hladan papir, duboka zelena ploča za
+fokus, cigleni akcenat za akciju i tirkizna za vrijeme. Stilovi su Tailwind
+tokeni u `src/styles.css`, a pokreti Framer Motion sa zajedničkim trajanjima
+u `src/lib/motion.ts`. Ulazi su ease-out, izlazi 20% kraći, liste se slažu
+na 30 ms, a `prefers-reduced-motion` se poštuje kroz `MotionConfig`.
+
 ## Struktura
 
 ```
@@ -68,9 +76,12 @@ src/
     store.ts              # akcije + hookovi (useSyncExternalStore)
     useStudyTimer.ts      # štoperica otporna na uspavljivanje ekrana
     useTodayKey.ts        # "danas" koji se sam promijeni u ponoć
+    motion.ts             # iste krive i trajanja za sve pokrete
   components/
     ExamCard.tsx  ExamSheet.tsx  DateField.tsx  StudyTimer.tsx  Icons.tsx
-  styles.css              # cijeli dizajn sistem (svjetla i tamna tema)
+    PressableButton.tsx   # jedinstven dodir na svim dugmadima
+    SheetLayer.tsx        # zajednička animirana fioka
+  styles.css              # Tailwind tokeni, tipografija i globalni sloj
 public/
   sw.js                   # offline keš
   manifest.webmanifest  icons/

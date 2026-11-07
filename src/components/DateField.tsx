@@ -1,23 +1,24 @@
 /**
- * Kalendar unutar forme. Namjerno nije "mjesec sa strelicama i 42 ćelije"
- * nego se otvara na sedmicu — do ispita se obično mjeri u danima, pa je
- * sedmica najbrža za odabir, a prelazak na mjesec je jedan dodir.
+ * Kalendar unutar forme. Otvara se na sedmicu — do ispita se obično mjeri u
+ * danima — a mjesec je jedan dodir dalje.
  */
+import { AnimatePresence, motion } from 'framer-motion';
 import { useMemo, useRef, useState } from 'react';
 import {
   MONTHS,
-  MONTHS_SHORT,
   WEEKDAYS_SHORT,
   addDays,
   formatLong,
   fromISODate,
   monthGrid,
+  relativeChip,
   shiftMonth,
   todayISO,
   toISODate,
 } from '../lib/date';
 import { IconCheck, IconChevronLeft } from './Icons';
-import { relativeChip } from '../lib/date';
+import { PressableButton } from './PressableButton';
+import { DROPDOWN_ENTER, DROPDOWN_EXIT, EASE_IN_OUT, EASE_OUT } from '../lib/motion';
 
 type Props = {
   value: string;
@@ -25,7 +26,6 @@ type Props = {
   /** Datumi koji imaju ispit — prikazuju se kao tačkica. */
   markedDates?: Set<string>;
   min?: string;
-  /** Prijavljuje roditelju da je kalendar otvoren (za raspored dijaloga). */
   onOpenChange?: (open: boolean) => void;
 };
 
@@ -34,10 +34,7 @@ export function DateField({ value, onChange, markedDates, min, onOpenChange }: P
   const [open, setOpen] = useState(false);
   const toggleRef = useRef<HTMLButtonElement>(null);
   const today = todayISO();
-
-  // Mjesec koji se prikazuje; postavlja se na odabrani datum pri otvaranju kalendara.
   const [cursor, setCursor] = useState(value);
-
   const minIso = min ?? today;
 
   const weeks = useMemo(() => {
@@ -48,7 +45,6 @@ export function DateField({ value, onChange, markedDates, min, onOpenChange }: P
     );
   }, [cursor]);
 
-  // Koja sedmica unutar liste sadrži odabrani datum (i prikazujemo samo tu i sljedeće dvije).
   const weekOffset = useMemo(() => {
     const idx = weeks.findIndex(w => w.includes(value));
     if (idx === -1) return 0;
@@ -57,12 +53,11 @@ export function DateField({ value, onChange, markedDates, min, onOpenChange }: P
 
   const visibleWeeks = weeks.slice(weekOffset, weekOffset + 3);
   const monthWeeks = useMemo(() => {
-    const weeks = monthGrid(cursor);
-    // Always return 6 rows to prevent height jumping between 5 and 6 week months
-    while (weeks.length < 6) {
-      weeks.push(Array.from({ length: 7 }, () => null));
+    const grid = monthGrid(cursor);
+    while (grid.length < 6) {
+      grid.push(Array.from({ length: 7 }, () => null));
     }
-    return weeks;
+    return grid;
   }, [cursor]);
 
   const pick = (iso: string) => {
@@ -77,19 +72,15 @@ export function DateField({ value, onChange, markedDates, min, onOpenChange }: P
 
   function closePanel() {
     setPanelOpen(false);
-    // Fokus se vraća na polje datuma, ne na skriveni dan u kalendaru.
     window.setTimeout(() => toggleRef.current?.focus({ preventScroll: true }), 0);
   }
 
-  // Funkcionalno ažuriranje: brzi uzastopni klikovi na strelice se ne guraju
-  // jedan preko drugog (svaki bi inače krenuo od zastarjelog `cursor`).
   const shiftCursor = (delta: number) => setCursor(c => shiftMonth(c, delta));
 
   return (
     <div
-      className="datefield"
+      className="relative"
       onKeyDown={e => {
-        // Escape prvo zatvara kalendar; tek sljedeći Escape zatvara fioku.
         if (open && e.key === 'Escape') {
           e.preventDefault();
           e.stopPropagation();
@@ -97,153 +88,173 @@ export function DateField({ value, onChange, markedDates, min, onOpenChange }: P
         }
       }}
     >
-      <button
+      <PressableButton
         type="button"
         ref={toggleRef}
-        className="datefield__toggle"
+        className="flex h-12 w-full items-center justify-between gap-3 rounded-xl border border-line bg-surface-strong px-3.5 text-left text-[15px] font-medium text-ink transition-colors hover:border-line-strong"
         onClick={() => {
           if (!open) setCursor(value);
           setPanelOpen(!open);
         }}
         aria-expanded={open}
         aria-controls={open ? 'datefield-panel' : undefined}
+        aria-label={`${formatLong(value)}, ${relativeChip(value)}`}
       >
-        <span className="datefield__value">{formatLong(value)}</span>
-        <span className="datefield__chip">{relativeChip(value)}</span>
-      </button>
+        <span>{formatLong(value)}</span>
+        <span className="shrink-0 text-[12.5px] font-medium text-time">{relativeChip(value)}</span>
+      </PressableButton>
 
-      {open && (
-        <div
-          className={`datefield__panel datefield__panel--${mode}`}
-          id="datefield-panel"
-          role="group"
-          aria-label="Kalendar"
-        >
-          <div className="datefield__bar">
-            <div className="segmented" role="group" aria-label="Prikaz kalendara">
-              <button
-                type="button"
-                aria-pressed={mode === 'week'}
-                className={mode === 'week' ? 'is-active' : ''}
-                onClick={() => {
-                  setMode('week');
-                  setCursor(value);
-                }}
-              >
-                Sedmica
-              </button>
-              <button
-                type="button"
-                aria-pressed={mode === 'month'}
-                className={mode === 'month' ? 'is-active' : ''}
-                onClick={() => setMode('month')}
-              >
-                Mjesec
-              </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            className="mt-2 overflow-hidden rounded-xl bg-surface-strong p-3"
+            id="datefield-panel"
+            role="group"
+            aria-label="Kalendar"
+            style={{ transformOrigin: 'top center' }}
+            initial={{ opacity: 0, clipPath: 'inset(0 0 100% 0)' }}
+            animate={{ opacity: 1, clipPath: 'inset(0 0 0% 0)' }}
+            exit={{
+              opacity: 0,
+              clipPath: 'inset(0 0 100% 0)',
+              transition: { duration: DROPDOWN_EXIT, ease: EASE_IN_OUT },
+            }}
+            transition={{ duration: DROPDOWN_ENTER, ease: EASE_OUT }}
+          >
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="relative inline-flex rounded-lg bg-canvas p-1" role="group" aria-label="Prikaz kalendara">
+                {(['week', 'month'] as const).map(m => (
+                  <PressableButton
+                    key={m}
+                    type="button"
+                    aria-pressed={mode === m}
+                    className={`relative z-10 rounded-md px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${
+                      mode === m ? 'text-ink' : 'text-ink-faint hover:text-ink'
+                    }`}
+                    onClick={() => {
+                      setMode(m);
+                      if (m === 'week') setCursor(value);
+                    }}
+                  >
+                    {m === 'week' ? 'Sedmica' : 'Mjesec'}
+                  </PressableButton>
+                ))}
+                <motion.span
+                  layoutId="calendar-mode"
+                  className="absolute inset-y-1 rounded-md bg-surface shadow-sm"
+                  style={{ left: mode === 'week' ? 4 : 76, width: 70 }}
+                  transition={{ duration: DROPDOWN_ENTER, ease: EASE_IN_OUT }}
+                  aria-hidden
+                />
+              </div>
+
+              {mode === 'week' && <MonthLabel date={value} />}
             </div>
 
-            {mode === 'week' && <MonthLabel date={value} />}
-          </div>
+            {mode === 'month' && (
+              <div className="mb-2 flex items-center justify-between">
+                <PressableButton
+                  type="button"
+                  className="grid size-8 place-items-center rounded-lg text-ink-faint transition-colors hover:bg-surface hover:text-ink"
+                  onClick={() => shiftCursor(-1)}
+                  aria-label="Prethodni mjesec"
+                >
+                  <IconChevronLeft size={17} />
+                </PressableButton>
+                <MonthLabel date={cursor} />
+                <PressableButton
+                  type="button"
+                  className="grid size-8 place-items-center rounded-lg text-ink-faint transition-colors hover:bg-surface hover:text-ink"
+                  onClick={() => shiftCursor(1)}
+                  aria-label="Sljedeći mjesec"
+                >
+                  <IconChevronLeft size={17} className="rotate-180" />
+                </PressableButton>
+              </div>
+            )}
 
-          {mode === 'month' && (
-            <div className="datefield__nav">
-              <button
-                type="button"
-                className="iconbtn iconbtn--sm"
-                onClick={() => shiftCursor(-1)}
-                aria-label="Prethodni mjesec"
-              >
-                <IconChevronLeft size={18} />
-              </button>
-              <MonthLabel date={cursor} />
-              <button
-                type="button"
-                className="iconbtn iconbtn--sm"
-                onClick={() => shiftCursor(1)}
-                aria-label="Sljedeći mjesec"
-              >
-                <IconChevronLeft size={18} className="icon-flip" />
-              </button>
-            </div>
-          )}
+            <motion.div
+              key={mode}
+              initial={{ opacity: 0, clipPath: 'inset(0 0 100% 0)' }}
+              animate={{ opacity: 1, clipPath: 'inset(0 0 0% 0)' }}
+              transition={{ duration: DROPDOWN_ENTER, ease: EASE_OUT }}
+            >
+              <div className="grid grid-cols-7 gap-1">
+                {WEEKDAYS_SHORT.map(day => (
+                  <span
+                    key={day}
+                    className="pb-1 text-center text-[10.5px] font-medium text-ink-faint"
+                  >
+                    {day}
+                  </span>
+                ))}
+              </div>
 
-          <div className="datefield__grid" aria-label="Kalendar">
-            <div className="datefield__weekdays">
-              {WEEKDAYS_SHORT.map(d => (
-                <span key={d}>{d}</span>
-              ))}
-            </div>
-
-            {mode === 'week'
-              ? visibleWeeks.map((week, i) => (
-                  <div className="datefield__row" key={week[0] ?? i}>
-                    {week.map(iso => (
-                      <Day key={iso} iso={iso} value={value} min={minIso} marked={markedDates?.has(iso)} onPick={pick} />
-                    ))}
-                  </div>
-                ))
-              : monthWeeks.map((week, i) => (
-                  <div className="datefield__row" key={i}>
+              <div className="mt-1 flex flex-col gap-1">
+                {(mode === 'week' ? visibleWeeks : monthWeeks).map((week, i) => (
+                  <div className="grid grid-cols-7 gap-1" key={week[0] ?? i}>
                     {week.map((iso, j) =>
                       iso ? (
-                        <Day key={iso} iso={iso} value={value} min={minIso} marked={markedDates?.has(iso)} onPick={pick} />
+                        <Day
+                          key={iso}
+                          iso={iso}
+                          value={value}
+                          min={minIso}
+                          marked={markedDates?.has(iso)}
+                          onPick={pick}
+                        />
                       ) : (
-                        <span key={`e${j}`} className="day day--empty" />
+                        <span key={`e${j}`} />
                       ),
                     )}
                   </div>
                 ))}
-          </div>
+              </div>
+            </motion.div>
 
-          <div className="datefield__actions">
-            <button
-              type="button"
-              className="linkbtn"
-              onClick={() => {
-                pick(today);
-                // Data brz prečac, ali lista mora prikazati taj datum.
-                setCursor(today);
-              }}
-            >
-              Danas
-            </button>
-            <button
-              type="button"
-              className="linkbtn"
-              onClick={() => {
-                // "Za mjesec" je jedan kalendarski mjesec, ne 30 dana.
-                const target = mode === 'week' ? addDays(value, 7) : shiftMonth(cursor, 1);
-                pick(target);
-                setCursor(target);
-              }}
-            >
-              {mode === 'week' ? 'Za sedmicu' : 'Za mjesec'}
-            </button>
-            <button type="button" className="linkbtn linkbtn--done" onClick={closePanel}>
-              <IconCheck size={15} />
-              Gotovo
-            </button>
-          </div>
-        </div>
-      )}
+            <div className="mt-2 flex items-center gap-1">
+              <PressableButton
+                type="button"
+                className="rounded-md px-2 py-1.5 text-[12.5px] font-semibold text-time transition-colors hover:bg-surface"
+                onClick={() => {
+                  pick(today);
+                  setCursor(today);
+                }}
+              >
+                Danas
+              </PressableButton>
+              <PressableButton
+                type="button"
+                className="rounded-md px-2 py-1.5 text-[12.5px] font-semibold text-time transition-colors hover:bg-surface"
+                onClick={() => {
+                  const target = mode === 'week' ? addDays(value, 7) : shiftMonth(cursor, 1);
+                  pick(target);
+                  setCursor(target);
+                }}
+              >
+                {mode === 'week' ? 'Za sedmicu' : 'Za mjesec'}
+              </PressableButton>
+              <PressableButton
+                type="button"
+                className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-[12.5px] font-semibold text-accent transition-colors hover:bg-surface"
+                onClick={closePanel}
+              >
+                <IconCheck size={14} />
+                Gotovo
+              </PressableButton>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-/**
- * Naziv mjeseca i godina. Skraćeno na uskim ekranima, puno na širem, i uvijek
- * u jednom redu — nikad se ne lomi na dva reda.
- */
 function MonthLabel({ date }: { date: string }) {
   const d = fromISODate(date);
   return (
-    <span className="datefield__month">
-      <span className="only-wide">
-        {MONTHS[d.getMonth()]} {d.getFullYear()}
-      </span>
-      <span className="only-narrow">
-        {MONTHS_SHORT[d.getMonth()]} {d.getFullYear()}.
-      </span>
+    <span className="shrink-0 text-[13px] font-medium text-ink-soft">
+      {MONTHS[d.getMonth()]} {d.getFullYear()}.
     </span>
   );
 }
@@ -264,28 +275,33 @@ function Day({
   const selected = iso === value;
   const isToday = iso === todayISO();
   const disabled = iso < min;
-  const [, m, d] = iso.split('-').map(Number);
-  // Ime mjeseca ispod broja pokazujemo samo na prvom danu u redu.
-  const showMonth = Number(d) === 1;
+  const d = Number(iso.slice(8, 10));
+
   return (
-    <button
+    <PressableButton
       type="button"
       className={[
-        'day',
-        selected && 'is-selected',
-        isToday && !selected && 'is-today',
-        disabled && 'is-disabled',
-      ]
-        .filter(Boolean)
-        .join(' ')}
+        'relative grid h-9 w-full place-items-center rounded-lg text-[13.5px] tabular-nums transition-colors',
+        selected
+          ? 'bg-ink font-semibold text-canvas'
+          : disabled
+            ? 'cursor-not-allowed text-ink-faint/45'
+            : isToday
+              ? 'font-semibold text-accent hover:bg-surface'
+              : 'text-ink-soft hover:bg-surface',
+      ].join(' ')}
       onClick={() => onPick(iso)}
       disabled={disabled}
       aria-pressed={selected}
       aria-label={formatLong(iso)}
     >
-      <span className="day__num">{d}</span>
-      <span className="day__month">{showMonth ? MONTHS_SHORT[m - 1] : '\u00a0'}</span>
-      {marked && <span className="day__dot" aria-hidden />}
-    </button>
+      {d}
+      {marked && (
+        <span
+          className={`absolute bottom-1.5 size-1 rounded-full ${selected ? 'bg-canvas' : 'bg-time'}`}
+          aria-hidden
+        />
+      )}
+    </PressableButton>
   );
 }

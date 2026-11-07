@@ -322,8 +322,7 @@ describe('Pazi! Ispit — tok korisnika', () => {
     );
 
     await user.keyboard('{Escape}');
-    await act(() => new Promise(resolve => setTimeout(resolve, 50)));
-    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
     expect(document.activeElement).toBe(trigger);
   });
 
@@ -338,7 +337,7 @@ describe('Pazi! Ispit — tok korisnika', () => {
     expect(within(dialog).getAllByRole('option').length).toBeGreaterThan(0);
 
     await user.tab();
-    expect(within(dialog).queryByRole('listbox')).not.toBeInTheDocument();
+    await waitFor(() => expect(within(dialog).queryByRole('listbox')).not.toBeInTheDocument());
     expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: dateToggleName() }));
   });
 
@@ -352,7 +351,9 @@ describe('Pazi! Ispit — tok korisnika', () => {
     expect(within(dialog).getByRole('group', { name: 'Kalendar' })).toBeInTheDocument();
 
     await user.keyboard('{Escape}');
-    expect(within(dialog).queryByRole('group', { name: 'Kalendar' })).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(within(dialog).queryByRole('group', { name: 'Kalendar' })).not.toBeInTheDocument(),
+    );
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
